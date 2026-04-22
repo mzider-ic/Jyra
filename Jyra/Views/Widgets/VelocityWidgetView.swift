@@ -21,7 +21,7 @@ struct VelocityWidgetView: View {
             } else if entries.isEmpty {
                 emptyView
             } else {
-                chartView(entries: Array(entries.suffix(displayCount)))
+                chartView(entries: displayEntries)
             }
         }
         .padding(16)
@@ -61,7 +61,8 @@ struct VelocityWidgetView: View {
                 completionChart(entries: entries)
             }
             .frame(minHeight: 270)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.top, 12)
+            .padding(.bottom, 10)
 
             legend
         }
@@ -189,6 +190,8 @@ struct VelocityWidgetView: View {
         }
         .chartPlotStyle { plot in
             plot
+                .padding(.top, 10)
+                .padding(.bottom, 6)
                 .background(
                     LinearGradient(
                         colors: [Color.white.opacity(0.05), Color.white.opacity(0.015)],
@@ -221,7 +224,7 @@ struct VelocityWidgetView: View {
             }
         }
         .chartXScale(domain: sprintDomain)
-        .chartYScale(domain: 0...100)
+        .chartYScale(domain: -5...105)
         .chartYAxis {
             AxisMarks(position: .trailing, values: [0, 25, 50, 75, 100]) { value in
                 AxisTick()
@@ -243,7 +246,10 @@ struct VelocityWidgetView: View {
         }
         .chartXAxis(.hidden)
         .chartPlotStyle { plot in
-            plot.background(.clear)
+            plot
+                .padding(.top, 10)
+                .padding(.bottom, 6)
+                .background(.clear)
         }
         .allowsHitTesting(false)
     }
@@ -283,11 +289,19 @@ struct VelocityWidgetView: View {
                 Spacer()
                 Button("Done") { showExpanded = false }
             }
-            chartView(entries: Array(entries.suffix(12)))
+            chartView(entries: expandedEntries)
                 .frame(minHeight: 500)
         }
         .padding(24)
         .frame(width: 760, height: 620)
+    }
+
+    private var displayEntries: [VelocityEntry] {
+        Array(entries.reversed().prefix(displayCount))
+    }
+
+    private var expandedEntries: [VelocityEntry] {
+        Array(entries.reversed().prefix(12))
     }
 
     private func load() async {
