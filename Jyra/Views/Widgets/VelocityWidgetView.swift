@@ -9,6 +9,7 @@ struct VelocityWidgetView: View {
     @State private var isLoading = false
     @State private var error: String? = nil
     @State private var showExpanded = false
+    @State private var hoveredSprint: String? = nil
 
     private let displayCount = 6
 
@@ -110,9 +111,11 @@ struct VelocityWidgetView: View {
         return entries.map(\.completed).reduce(0, +) / Double(entries.count)
     }
 
+    // Only count sprints that are done and have committed points
     private func averageCompletion(entries: [VelocityEntry]) -> Double {
-        guard !entries.isEmpty else { return 0 }
-        let percents = entries.map(completionPercent(for:))
+        let eligible = entries.filter { !$0.isActive && $0.committed > 0 }
+        guard !eligible.isEmpty else { return 0 }
+        let percents = eligible.map(completionPercent(for:))
         return percents.reduce(0, +) / Double(percents.count)
     }
 
@@ -124,6 +127,8 @@ struct VelocityWidgetView: View {
     private func pointsChart(entries: [VelocityEntry]) -> some View {
         let avg = average(entries: entries)
         let sprintDomain = entries.map(\.sprintName)
+        // Phantom padding categories so bars never touch the left/right edges
+        let paddedDomain = ["__pad_l__"] + sprintDomain + ["__pad_r__"]
 
         return Chart {
             ForEach(entries) { entry in
@@ -135,6 +140,15 @@ struct VelocityWidgetView: View {
                 .foregroundStyle(palette.committedColor.gradient)
                 .cornerRadius(4)
                 .opacity(0.85)
+                .annotation(position: .overlay, alignment: .center) {
+                    if entry.committed >= 1 {
+                        Text("\(Int(entry.committed.rounded()))")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .rotationEffect(.degrees(-90))
+                            .fixedSize()
+                    }
+                }
 
                 BarMark(
                     x: .value("Sprint", entry.sprintName),
@@ -143,6 +157,15 @@ struct VelocityWidgetView: View {
                 .position(by: .value("Series", "Completed"))
                 .foregroundStyle(palette.completedColor.gradient)
                 .cornerRadius(4)
+                .annotation(position: .overlay, alignment: .center) {
+                    if entry.completed >= 1 {
+                        Text("\(Int(entry.completed.rounded()))")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .rotationEffect(.degrees(-90))
+                            .fixedSize()
+                    }
+                }
                 .annotation(position: .top) {
                     if entry.isActive {
                         activeSprintBadge
@@ -159,7 +182,7 @@ struct VelocityWidgetView: View {
                         .foregroundStyle(palette.averageColor)
                 }
         }
-        .chartXScale(domain: sprintDomain)
+        .chartXScale(domain: paddedDomain)
         .chartYAxis {
             AxisMarks(position: .leading) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
@@ -191,13 +214,38 @@ struct VelocityWidgetView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         }
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle()
+                    .fill(.white.opacity(0.001))
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let location):
+                            if let plotFrame = proxy.plotFrame {
+                                let frame = geo[plotFrame]
+                                let relX = location.x - frame.minX
+                                hoveredSprint = entries.min(by: { a, b in
+                                    let ax = proxy.position(forX: a.sprintName) ?? .infinity
+                                    let bx = proxy.position(forX: b.sprintName) ?? .infinity
+                                    return abs(ax - relX) < abs(bx - relX)
+                                })?.sprintName
+                            }
+                        case .ended:
+                            hoveredSprint = nil
+                        }
+                    }
+            }
+        }
     }
 
     private func completionChart(entries: [VelocityEntry]) -> some View {
+        // Only plot sprints that are done and have committed points
+        let eligible = entries.filter { !$0.isActive && $0.committed > 0 }
         let sprintDomain = entries.map(\.sprintName)
+        let paddedDomain = ["__pad_l__"] + sprintDomain + ["__pad_r__"]
 
         return Chart {
-            ForEach(entries) { entry in
+            ForEach(eligible) { entry in
                 LineMark(
                     x: .value("Sprint", entry.sprintName),
                     y: .value("Percent Complete", completionPercent(for: entry))
@@ -206,16 +254,27 @@ struct VelocityWidgetView: View {
                 .foregroundStyle(palette.completionColor)
                 .lineStyle(StrokeStyle(lineWidth: 2.5))
 
+                let pct = completionPercent(for: entry)
                 PointMark(
                     x: .value("Sprint", entry.sprintName),
-                    y: .value("Percent Complete", completionPercent(for: entry))
+                    y: .value("Percent Complete", pct)
                 )
                 .foregroundStyle(palette.completionColor)
                 .symbolSize(35)
+                .annotation(position: pct > 80 ? .bottom : .top) {
+                    if entry.sprintName == hoveredSprint {
+                        Text("\(Int(pct.rounded()))%")
+                            .font(.system(size: 11, weight: .semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
+                            .foregroundStyle(palette.completionColor)
+                    }
+                }
             }
         }
-        .chartXScale(domain: sprintDomain)
-        .chartYScale(domain: -5...105)
+        .chartXScale(domain: paddedDomain)
+        .chartYScale(domain: 0...100)
         .chartYAxis {
             AxisMarks(position: .trailing, values: [0, 25, 50, 75, 100]) { value in
                 AxisTick()
@@ -265,6 +324,8 @@ struct VelocityWidgetView: View {
             }
         }
         .padding(.horizontal, 18)
+        // Render above the chart in the VStack — SwiftUI draws later siblings on top
+        .zIndex(1)
     }
 
     private var palette: VelocityPalette {
@@ -322,15 +383,17 @@ struct VelocityWidgetView: View {
 
     private var orderedDisplayEntries: [VelocityEntry] {
         let activeEntries = entries.filter(\.isActive)
+        // Exclude sprints with no points at all
         let historicalEntries = entries
-            .filter { !$0.isActive }
+            .filter { !$0.isActive && ($0.committed > 0 || $0.completed > 0) }
             .sorted { lhs, rhs in
                 if velocityDisplayDate(for: lhs) == velocityDisplayDate(for: rhs) {
                     return lhs.id > rhs.id
                 }
                 return velocityDisplayDate(for: lhs) > velocityDisplayDate(for: rhs)
             }
-        return activeEntries + historicalEntries
+        // Oldest historical on left, newest historical next, active sprint on far right
+        return historicalEntries.reversed() + activeEntries
     }
 
     private func velocityDisplayDate(for entry: VelocityEntry) -> Date {
