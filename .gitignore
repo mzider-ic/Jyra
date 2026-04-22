@@ -29,3 +29,7 @@ DerivedData/
 # ── OS / misc ─────────────────────────────────────────────────────────────
 Thumbs.db
 Desktop.ini
+
+#Dual-Graph
+.dual-graph/
+.dual-graph-context/
