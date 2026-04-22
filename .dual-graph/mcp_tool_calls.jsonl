@@ -1,4 +1,0 @@
-{"timestamp": "2026-04-21T23:42:01.303421+00:00", "tool": "graph_retrieve", "payload": {"query": "Jira webapp dashboard widgets velocity burndown metrics", "top_files": 5, "top_edges": 12}}
-{"timestamp": "2026-04-22T00:14:06.096315+00:00", "tool": "graph_retrieve", "payload": {"query": "README setup claudeignore documentation", "top_files": 5, "top_edges": 12}}
-{"timestamp": "2026-04-22T00:15:42.953541+00:00", "tool": "graph_retrieve", "payload": {"query": "gitignore project files", "top_files": 5, "top_edges": 12}}
-{"timestamp": "2026-04-22T12:20:51.708567+00:00", "tool": "graph_retrieve", "payload": {"query": "Swift macOS app services views ConfigService JiraService DashboardService", "top_files": 5, "top_edges": 12}}
