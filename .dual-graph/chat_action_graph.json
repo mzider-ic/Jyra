@@ -1,0 +1,76 @@
+{
+  "nodes": [
+    {
+      "id": "query:jira webapp dashboard widgets velocity burndown metrics",
+      "type": "query",
+      "meta": {
+        "text": "Jira webapp dashboard widgets velocity burndown metrics"
+      }
+    },
+    {
+      "id": "CLAUDE.md",
+      "type": "file"
+    },
+    {
+      "id": "query:readme setup claudeignore documentation",
+      "type": "query",
+      "meta": {
+        "text": "README setup claudeignore documentation"
+      }
+    },
+    {
+      "id": "query:gitignore project files",
+      "type": "query",
+      "meta": {
+        "text": "gitignore project files"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "query:jira webapp dashboard widgets velocity burndown metrics",
+      "to": "CLAUDE.md",
+      "rel": "retrieved",
+      "ts": 1776814921
+    },
+    {
+      "from": "query:readme setup claudeignore documentation",
+      "to": "CLAUDE.md",
+      "rel": "retrieved",
+      "ts": 1776816846
+    },
+    {
+      "from": "query:gitignore project files",
+      "to": "CLAUDE.md",
+      "rel": "retrieved",
+      "ts": 1776816942
+    }
+  ],
+  "files": {},
+  "actions": [
+    {
+      "ts": 1776814921,
+      "kind": "retrieve",
+      "payload": {
+        "kind": "retrieve",
+        "query": "Jira webapp dashboard widgets velocity burndown metrics"
+      }
+    },
+    {
+      "ts": 1776816846,
+      "kind": "retrieve",
+      "payload": {
+        "kind": "retrieve",
+        "query": "README setup claudeignore documentation"
+      }
+    },
+    {
+      "ts": 1776816942,
+      "kind": "retrieve",
+      "payload": {
+        "kind": "retrieve",
+        "query": "gitignore project files"
+      }
+    }
+  ]
+}

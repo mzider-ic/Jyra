@@ -1,0 +1,100 @@
+{
+  "entries": {
+    "readme setup claudeignore documentation|tf=5|te=12": {
+      "created_epoch": 1776816846,
+      "files": [
+        "CLAUDE.md"
+      ],
+      "mtimes_ns": {
+        "CLAUDE.md": 1776813958618399667
+      },
+      "result": {
+        "ok": true,
+        "query": "README setup claudeignore documentation",
+        "graph_files": [
+          {
+            "id": "CLAUDE.md",
+            "kind": "file",
+            "path": "CLAUDE.md",
+            "ext": ".md",
+            "size": 4020,
+            "keywords": [],
+            "summary": "<!-- dgc-policy-v11 -->.",
+            "file_hash": "78a3b1a3"
+          }
+        ],
+        "graph_edges": [
+          {
+            "from": "CLAUDE.md",
+            "to": "src/auth.ts",
+            "rel": "references"
+          },
+          {
+            "from": "CLAUDE.md",
+            "to": "src/db.ts",
+            "rel": "references"
+          },
+          {
+            "from": "CLAUDE.md",
+            "to": "relevant/file.ts",
+            "rel": "references"
+          }
+        ],
+        "grep_hits": [],
+        "reuse_candidates": [],
+        "read_budget": {
+          "remaining_chars": 60000,
+          "reuse_gate_candidates": []
+        }
+      }
+    },
+    "gitignore project files|tf=5|te=12": {
+      "created_epoch": 1776816942,
+      "files": [
+        "CLAUDE.md"
+      ],
+      "mtimes_ns": {
+        "CLAUDE.md": 1776813958618399667
+      },
+      "result": {
+        "ok": true,
+        "query": "gitignore project files",
+        "graph_files": [
+          {
+            "id": "CLAUDE.md",
+            "kind": "file",
+            "path": "CLAUDE.md",
+            "ext": ".md",
+            "size": 4020,
+            "keywords": [],
+            "summary": "<!-- dgc-policy-v11 -->.",
+            "file_hash": "78a3b1a3"
+          }
+        ],
+        "graph_edges": [
+          {
+            "from": "CLAUDE.md",
+            "to": "src/auth.ts",
+            "rel": "references"
+          },
+          {
+            "from": "CLAUDE.md",
+            "to": "src/db.ts",
+            "rel": "references"
+          },
+          {
+            "from": "CLAUDE.md",
+            "to": "relevant/file.ts",
+            "rel": "references"
+          }
+        ],
+        "grep_hits": [],
+        "reuse_candidates": [],
+        "read_budget": {
+          "remaining_chars": 60000,
+          "reuse_gate_candidates": []
+        }
+      }
+    }
+  }
+}

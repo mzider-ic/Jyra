@@ -1,0 +1,28 @@
+# Dependencies — large, auto-generated, not relevant to understanding the codebase
+node_modules/
+
+# Next.js build output — compiled artifacts
+.next/
+
+# Lock file — thousands of lines, not useful for code understanding
+package-lock.json
+
+# Dual-graph context store — internal tooling metadata
+.dual-graph/
+
+# Runtime logs
+*.log
+/tmp/
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Editor directories
+.vscode/
+.idea/
+
+# Environment files (should not exist in this project, but guard anyway)
+.env
+.env.local
+.env.*.local
