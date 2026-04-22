@@ -91,6 +91,24 @@ struct WidgetConfigView: View {
                 ))
                 .textFieldStyle(.roundedBorder)
             }
+
+            Toggle("Use custom colors", isOn: Binding(
+                get: { velocityConfig?.paletteOverride != nil },
+                set: { isEnabled in
+                    guard let current = velocityConfig else { return }
+                    velocityConfig?.paletteOverride = isEnabled ? (current.paletteOverride ?? .default) : nil
+                }
+            ))
+
+            if velocityConfig?.paletteOverride != nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Widget Colors").font(.subheadline.bold())
+                    ColorPicker("Committed", selection: velocityPaletteBinding(\.committedHex))
+                    ColorPicker("Completed", selection: velocityPaletteBinding(\.completedHex))
+                    ColorPicker("Percent Complete", selection: velocityPaletteBinding(\.completionHex))
+                    ColorPicker("Average Line", selection: velocityPaletteBinding(\.averageHex))
+                }
+            }
         }
     }
 
@@ -257,5 +275,22 @@ struct WidgetConfigView: View {
     private func loadSprints(boardId: Int) async {
         guard let cfg = configService.config else { return }
         sprints = (try? await JiraService(config: cfg).fetchSprints(boardId: boardId)) ?? []
+    }
+
+    private func velocityPaletteBinding(_ keyPath: WritableKeyPath<VelocityPalette, String>) -> Binding<Color> {
+        Binding(
+            get: {
+                let palette = velocityConfig?.paletteOverride ?? .default
+                return Color(hex: palette[keyPath: keyPath])
+            },
+            set: { color in
+                if velocityConfig?.paletteOverride == nil {
+                    velocityConfig?.paletteOverride = .default
+                }
+                guard var palette = velocityConfig?.paletteOverride else { return }
+                palette[keyPath: keyPath] = color.hexString
+                velocityConfig?.paletteOverride = palette
+            }
+        )
     }
 }

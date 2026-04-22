@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var isSaved = false
     @State private var testResult: String? = nil
     @State private var testSuccess = false
+    @State private var velocityPalette = VelocityPalette.default
 
     var body: some View {
         Form {
@@ -19,6 +20,13 @@ struct SettingsView: View {
                 TextField("Email", text: $email)
                 SecureField("API Token", text: $apiKey)
                     .help("Generate from id.atlassian.com/manage-profile/security/api-tokens")
+            }
+
+            Section("Default Velocity Colors") {
+                ColorPicker("Committed", selection: paletteBinding(\.committedHex))
+                ColorPicker("Completed", selection: paletteBinding(\.completedHex))
+                ColorPicker("Percent Complete", selection: paletteBinding(\.completionHex))
+                ColorPicker("Average Line", selection: paletteBinding(\.averageHex))
             }
 
             Section {
@@ -75,13 +83,14 @@ struct SettingsView: View {
         jiraURL = cfg.jiraURL
         email = cfg.email
         apiKey = cfg.apiKey
+        velocityPalette = cfg.velocityPalette
     }
 
     private func testConnection() async {
         isTesting = true
         testResult = nil
         defer { isTesting = false }
-        let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey)
+        let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey, velocityPalette: velocityPalette)
         do {
             let name = try await JiraService(config: cfg).ping()
             testSuccess = true
@@ -93,12 +102,19 @@ struct SettingsView: View {
     }
 
     private func saveSettings() {
-        let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey)
+        let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey, velocityPalette: velocityPalette)
         try? configService.save(cfg)
         isSaved = true
         Task {
             try? await Task.sleep(for: .seconds(2))
             isSaved = false
         }
+    }
+
+    private func paletteBinding(_ keyPath: WritableKeyPath<VelocityPalette, String>) -> Binding<Color> {
+        Binding(
+            get: { Color(hex: velocityPalette[keyPath: keyPath]) },
+            set: { velocityPalette[keyPath: keyPath] = $0.hexString }
+        )
     }
 }

@@ -94,11 +94,13 @@ struct VelocityConfig: Codable, Equatable {
     var boardId: Int
     var boardName: String
     var title: String
+    var paletteOverride: VelocityPalette?
 
-    init(boardId: Int, boardName: String, title: String = "") {
+    init(boardId: Int, boardName: String, title: String = "", paletteOverride: VelocityPalette? = nil) {
         self.boardId = boardId
         self.boardName = boardName
         self.title = title
+        self.paletteOverride = paletteOverride
     }
 
     var displayTitle: String {

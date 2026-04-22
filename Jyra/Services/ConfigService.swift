@@ -10,6 +10,7 @@ final class ConfigService {
     private let keychainService = "com.jyra.apikey"
     private let defaultsURL = "jira_url"
     private let defaultsEmail = "jira_email"
+    private let defaultsVelocityPalette = "velocity_palette"
 
     init() {
         load()
@@ -19,6 +20,9 @@ final class ConfigService {
         try saveApiKey(config.apiKey)
         UserDefaults.standard.set(config.jiraURL, forKey: defaultsURL)
         UserDefaults.standard.set(config.email, forKey: defaultsEmail)
+        if let paletteData = try? JSONEncoder().encode(config.velocityPalette) {
+            UserDefaults.standard.set(paletteData, forKey: defaultsVelocityPalette)
+        }
         self.config = config
     }
 
@@ -26,6 +30,7 @@ final class ConfigService {
         deleteApiKey()
         UserDefaults.standard.removeObject(forKey: defaultsURL)
         UserDefaults.standard.removeObject(forKey: defaultsEmail)
+        UserDefaults.standard.removeObject(forKey: defaultsVelocityPalette)
         config = nil
     }
 
@@ -36,7 +41,14 @@ final class ConfigService {
             let key = loadApiKey(),
             !url.isEmpty, !email.isEmpty, !key.isEmpty
         else { return }
-        config = AppConfig(jiraURL: url, email: email, apiKey: key)
+        let palette: VelocityPalette = {
+            guard let data = UserDefaults.standard.data(forKey: defaultsVelocityPalette),
+                  let decoded = try? JSONDecoder().decode(VelocityPalette.self, from: data) else {
+                return .default
+            }
+            return decoded
+        }()
+        config = AppConfig(jiraURL: url, email: email, apiKey: key, velocityPalette: palette)
     }
 
     // MARK: Keychain
