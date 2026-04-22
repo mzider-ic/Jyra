@@ -25,6 +25,7 @@ struct VelocityWidgetView: View {
             }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 340, alignment: .top)
         .task { await load() }
         .onTapGesture { if !entries.isEmpty { showExpanded = true } }
         .sheet(isPresented: $showExpanded) {
@@ -59,7 +60,7 @@ struct VelocityWidgetView: View {
                 pointsChart(entries: entries)
                 completionChart(entries: entries)
             }
-            .frame(minHeight: 220)
+            .frame(minHeight: 270)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             legend
@@ -120,6 +121,7 @@ struct VelocityWidgetView: View {
 
     private func pointsChart(entries: [VelocityEntry]) -> some View {
         let avg = average(entries: entries)
+        let sprintDomain = entries.map(\.sprintName)
 
         return Chart {
             ForEach(entries) { entry in
@@ -139,6 +141,11 @@ struct VelocityWidgetView: View {
                 .position(by: .value("Series", "Completed"))
                 .foregroundStyle(palette.completedColor.gradient)
                 .cornerRadius(4)
+                .annotation(position: .top) {
+                    if entry.isActive {
+                        activeSprintBadge
+                    }
+                }
             }
 
             RuleMark(y: .value("Average", avg))
@@ -150,6 +157,7 @@ struct VelocityWidgetView: View {
                         .foregroundStyle(palette.averageColor)
                 }
         }
+        .chartXScale(domain: sprintDomain)
         .chartYAxis {
             AxisMarks(position: .leading) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
@@ -192,7 +200,9 @@ struct VelocityWidgetView: View {
     }
 
     private func completionChart(entries: [VelocityEntry]) -> some View {
-        Chart {
+        let sprintDomain = entries.map(\.sprintName)
+
+        return Chart {
             ForEach(entries) { entry in
                 LineMark(
                     x: .value("Sprint", entry.sprintName),
@@ -210,6 +220,7 @@ struct VelocityWidgetView: View {
                 .symbolSize(35)
             }
         }
+        .chartXScale(domain: sprintDomain)
         .chartYScale(domain: 0...100)
         .chartYAxis {
             AxisMarks(position: .trailing, values: [0, 25, 50, 75, 100]) { value in
@@ -241,6 +252,22 @@ struct VelocityWidgetView: View {
         config.paletteOverride ?? configService.config?.velocityPalette ?? .default
     }
 
+    private var activeSprintBadge: some View {
+        Text("Active")
+            .font(.system(size: 9, weight: .semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                Capsule()
+                    .fill(palette.completionColor.opacity(0.18))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(palette.completionColor.opacity(0.6), lineWidth: 1)
+            )
+            .foregroundStyle(palette.completionColor)
+    }
+
     private func shortSprintLabel(_ name: String) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let words = trimmed.split(separator: " ")
@@ -257,10 +284,10 @@ struct VelocityWidgetView: View {
                 Button("Done") { showExpanded = false }
             }
             chartView(entries: Array(entries.suffix(12)))
-                .frame(minHeight: 400)
+                .frame(minHeight: 500)
         }
         .padding(24)
-        .frame(width: 700, height: 520)
+        .frame(width: 760, height: 620)
     }
 
     private func load() async {

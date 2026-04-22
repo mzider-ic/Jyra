@@ -3,6 +3,8 @@ import Foundation
 actor JiraService {
     private let config: AppConfig
     private let session: URLSession
+    private var cachedFields: [JiraField]? = nil
+    private var cachedPreferredPointsField: JiraField? = nil
 
     init(config: AppConfig) {
         self.config = config
@@ -56,7 +58,12 @@ actor JiraService {
     // MARK: - Fields
 
     func fetchFields() async throws -> [JiraField] {
-        return try await get("/rest/api/3/field")
+        if let cachedFields {
+            return cachedFields
+        }
+        let fields: [JiraField] = try await get("/rest/api/3/field")
+        cachedFields = fields
+        return fields
     }
 
     // MARK: - Velocity (Greenhopper)
@@ -99,13 +106,16 @@ actor JiraService {
     func fetchVelocityEntries(boardId: Int) async throws -> [VelocityEntry] {
         async let velocityResp = fetchVelocity(boardId: boardId)
         async let sprints = fetchSprints(boardId: boardId)
+        async let currentSprintEntry = fetchCurrentSprintVelocityEntry(boardId: boardId)
+        async let activeSprint = fetchActiveSprint(boardId: boardId)
 
-        let (vel, allSprints) = try await (velocityResp, sprints)
+        let (vel, allSprints, activeEntry, activeSprintInfo) = try await (velocityResp, sprints, currentSprintEntry, activeSprint)
+        let activeSprintId = activeSprintInfo?.id ?? activeEntry?.id
 
         let sprintMap = Dictionary(uniqueKeysWithValues: allSprints.map { ($0.id, $0) })
         let fmt = ISO8601DateFormatter()
 
-        return vel.sprints.compactMap { ref -> VelocityEntry? in
+        var entries = vel.sprints.compactMap { ref -> VelocityEntry? in
             guard let stats = vel.velocityStatEntries["\(ref.id)"] else { return nil }
             let sprint = sprintMap[ref.id]
             return VelocityEntry(
@@ -114,9 +124,17 @@ actor JiraService {
                 startDate: sprint?.startDate.flatMap { fmt.date(from: $0) },
                 endDate: sprint?.endDate.flatMap { fmt.date(from: $0) },
                 committed: stats.estimated.value,
-                completed: stats.completed.value
+                completed: stats.completed.value,
+                isActive: ref.id == activeSprintId
             )
-        }.sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
+        }
+
+        if let activeEntry {
+            entries.removeAll { $0.id == activeEntry.id }
+            entries.append(activeEntry)
+        }
+
+        return entries.sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
     }
 
     // MARK: - Sprint issues for burndown
@@ -369,6 +387,39 @@ actor JiraService {
         return Array(Set(resp.sections.flatMap(\.issues))).sorted { $0.key < $1.key }
     }
 
+    private func fetchCurrentSprintVelocityEntry(boardId: Int) async throws -> VelocityEntry? {
+        guard let activeSprint = try await fetchActiveSprint(boardId: boardId) else {
+            return nil
+        }
+
+        guard let pointsField = try await fetchPreferredPointsField() else {
+            return nil
+        }
+
+        let issues = try await fetchSprintIssues(
+            boardId: boardId,
+            sprintId: activeSprint.id,
+            pointsField: pointsField.id
+        )
+
+        let fmt = ISO8601DateFormatter()
+        let committed = issues.issues.reduce(0.0) { $0 + ($1.fields.storyPoints ?? 0) }
+        let completed = issues.issues.reduce(0.0) { partial, issue in
+            let isDone = issue.fields.status.statusCategory.key == "done"
+            return partial + (isDone ? (issue.fields.storyPoints ?? 0) : 0)
+        }
+
+        return VelocityEntry(
+            id: activeSprint.id,
+            sprintName: activeSprint.name,
+            startDate: activeSprint.startDate.flatMap { fmt.date(from: $0) },
+            endDate: activeSprint.endDate.flatMap { fmt.date(from: $0) },
+            committed: committed,
+            completed: completed,
+            isActive: true
+        )
+    }
+
     // MARK: - HTTP
 
     private func fetchVelocityPage(boardId: Int, transactionId: String?) async throws -> VelocityResponse {
@@ -412,6 +463,27 @@ actor JiraService {
                 pointValue: storyPoints
             )
         }
+    }
+
+    private func fetchPreferredPointsField() async throws -> JiraField? {
+        if let cachedPreferredPointsField {
+            return cachedPreferredPointsField
+        }
+
+        let fields = try await fetchFields()
+        let preferred = fields.first {
+            $0.name.compare("Story Points", options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        } ?? fields.first {
+            $0.name.localizedCaseInsensitiveContains("story point")
+        } ?? fields.first {
+            $0.name.localizedCaseInsensitiveContains("point estimate")
+        } ?? fields.first {
+            $0.name.localizedCaseInsensitiveContains("story")
+            && $0.name.localizedCaseInsensitiveContains("point")
+        }
+
+        cachedPreferredPointsField = preferred
+        return preferred
     }
 
     private func get<T: Decodable>(_ path: String, query: [String: String] = [:], pointsField: String? = nil) async throws -> T {

@@ -102,6 +102,7 @@ struct VelocityEntry: Identifiable {
     let endDate: Date?
     let committed: Double
     let completed: Double
+    let isActive: Bool
 }
 
 struct BurndownPoint: Identifiable {
