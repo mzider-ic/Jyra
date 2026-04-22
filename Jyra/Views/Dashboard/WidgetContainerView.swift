@@ -62,7 +62,7 @@ struct WidgetContainerView: View {
     @ViewBuilder
     private func widgetHeader(_ widget: Widget) -> some View {
         HStack {
-            Label(widget.type.displayName, systemImage: widgetIcon(widget.type))
+            Label(widgetTitle(widget), systemImage: widgetIcon(widget.type))
                 .font(.subheadline.bold())
             Spacer()
             Menu {
@@ -108,6 +108,17 @@ struct WidgetContainerView: View {
         }
     }
 
+    private func widgetTitle(_ widget: Widget) -> String {
+        switch widget.config {
+        case .velocity(let cfg):
+            return cfg.displayTitle
+        case .burndown(let cfg):
+            return cfg.boardName
+        case .projectBurnRate(let cfg):
+            return cfg.projectName
+        }
+    }
+
     private var emptyState: some View {
         ContentUnavailableView {
             Label("No Widgets", systemImage: "square.dashed")
@@ -134,7 +145,6 @@ struct AddWidgetSheet: View {
     @State private var size: WidgetSize = .half
     @State private var selectedBoard: JiraBoard? = nil
     @State private var projectName = "My Project"
-    @State private var totalPoints: Double = 100
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -162,12 +172,6 @@ struct AddWidgetSheet: View {
             if selectedType == .projectBurnRate {
                 TextField("Project name", text: $projectName)
                     .textFieldStyle(.roundedBorder)
-                HStack {
-                    Text("Total points")
-                    TextField("e.g. 500", value: $totalPoints, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
             } else {
                 BoardSearchField(selectedBoard: $selectedBoard)
             }
@@ -195,9 +199,7 @@ struct AddWidgetSheet: View {
             config = .burndown(BurndownConfig(boardId: board.id, boardName: board.name))
         case .projectBurnRate:
             config = .projectBurnRate(ProjectBurnRateConfig(
-                projectName: projectName,
-                totalPoints: totalPoints,
-                teams: []
+                projectName: projectName
             ))
         }
         dashboardService.addWidget(Widget(type: selectedType, size: size, config: config), to: dashboard)

@@ -18,14 +18,16 @@ struct ProjectBurnRateWidgetView: View {
                 errorView(err)
             } else if let result {
                 chartView(result: result)
-            } else if config.teams.isEmpty {
-                ContentUnavailableView("No teams configured", systemImage: "person.3")
+            } else if config.teamBoardId == nil {
+                ContentUnavailableView("No team configured", systemImage: "person.3")
+            } else if config.parentIssues.isEmpty {
+                ContentUnavailableView("No scope selected", systemImage: "list.bullet.rectangle")
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .padding(16)
-        .task(id: config.projectName) { await load() }
+        .task(id: burnRateTaskKey) { await load() }
     }
 
     private func errorView(_ msg: String) -> some View {
@@ -80,7 +82,9 @@ struct ProjectBurnRateWidgetView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(config.projectName).font(.caption.bold())
-                Text("\(Int(result.totalPoints)) total pts").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("\(Int(result.totalPoints)) total \(config.pointsFieldName.lowercased())")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
@@ -96,13 +100,25 @@ struct ProjectBurnRateWidgetView: View {
 
     private func teamList(result: ProjectBurnResult) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(result.teams) { team in
-                HStack {
-                    Text(team.name).font(.system(size: 10))
-                    Spacer()
-                    Text("avg \(Int(team.avgVelocity)) pts")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+            HStack {
+                Text(result.team.name).font(.system(size: 10))
+                Spacer()
+                Text("avg \(Int(result.team.avgVelocity)) pts")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+
+            if !result.scopeIssues.isEmpty {
+                Divider().padding(.vertical, 2)
+                ForEach(result.scopeIssues.prefix(5)) { issue in
+                    HStack {
+                        Text(issue.key).font(.system(size: 10, design: .monospaced))
+                        Spacer()
+                        Text("\(Int(issue.pointValue)) pts")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    .help(issue.summary)
                 }
             }
         }
@@ -110,7 +126,9 @@ struct ProjectBurnRateWidgetView: View {
     }
 
     private func load() async {
-        guard let cfg = configService.config, !config.teams.isEmpty else { return }
+        guard let cfg = configService.config,
+              config.teamBoardId != nil,
+              !config.parentIssues.isEmpty else { return }
         isLoading = true
         error = nil
         defer { isLoading = false }
@@ -119,5 +137,10 @@ struct ProjectBurnRateWidgetView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private var burnRateTaskKey: String {
+        let scopeKeys = config.parentIssues.map(\.key).joined(separator: ",")
+        return "\(config.projectName)|\(config.teamBoardId ?? 0)|\(config.pointsField)|\(scopeKeys)"
     }
 }

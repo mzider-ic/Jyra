@@ -14,6 +14,7 @@
 		37BCE4FAE445377D6425256F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517149259EA4FC686B868ABA /* ContentView.swift */; };
 		392C5ED91B8F0F8068FCA9A8 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27357B3E4FB7F3B6CC1BD92A /* SetupView.swift */; };
 		4A047A00B61C498AAED0F0CF /* BoardSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7157008BB68D44B253C48334 /* BoardSearchField.swift */; };
+		4F50C1F01111111111111111 /* FieldSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F50C1F11111111111111111 /* FieldSearchField.swift */; };
 		5B29FAE6797631E1752DF665 /* Charts.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DF726889D7D43F61D5A72426 /* Charts.framework */; };
 		5B32A8BD501C9ADF1B07EE2F /* ConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A486C11E57C99E68EBFC63 /* ConfigService.swift */; };
 		64244527F131FE5C2414553E /* JiraService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10250A20A651EEF24A547028 /* JiraService.swift */; };
@@ -22,6 +23,7 @@
 		83B3292E056AD537AFF4BEB4 /* JyraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7659BB2273A8141737EC6CB3 /* JyraApp.swift */; };
 		90F92D70CAEF7B4F601A800A /* JiraModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92619A65A4391E8187CCC168 /* JiraModels.swift */; };
 		9B3A4ED06BCDBDAD084F314F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AC2BFABF7B83DC235406B3B /* SettingsView.swift */; };
+		B650C1F01111111111111111 /* IssueSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B650C1F11111111111111111 /* IssueSearchField.swift */; };
 		C0EDC127A39C7A3A6EB55E1A /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917BB02780EAD3B4A025ABE0 /* AppConfig.swift */; };
 		E257E483271B221720EF42D3 /* BurndownWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2810B3FAF1BDAC895C12E54 /* BurndownWidgetView.swift */; };
 		F04E7DCA1F30D1C07F65ECF1 /* WidgetContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088750E7FF213B7C30F97C9D /* WidgetContainerView.swift */; };
@@ -35,8 +37,10 @@
 		3B42E2865D6CA4AD48B90F11 /* VelocityWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VelocityWidgetView.swift; sourceTree = "<group>"; };
 		46F7818CD2D0A53A529F3242 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		4F7E51F0F7550228ADF66ED8 /* WidgetConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetConfigView.swift; sourceTree = "<group>"; };
+		4F50C1F11111111111111111 /* FieldSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldSearchField.swift; sourceTree = "<group>"; };
 		517149259EA4FC686B868ABA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		5AC2BFABF7B83DC235406B3B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B650C1F11111111111111111 /* IssueSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueSearchField.swift; sourceTree = "<group>"; };
 		7157008BB68D44B253C48334 /* BoardSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardSearchField.swift; sourceTree = "<group>"; };
 		73CAB50CF80A70D9AA9E136A /* Jyra.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Jyra.entitlements; sourceTree = "<group>"; };
 		7659BB2273A8141737EC6CB3 /* JyraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JyraApp.swift; sourceTree = "<group>"; };
@@ -91,6 +95,8 @@
 			isa = PBXGroup;
 			children = (
 				7157008BB68D44B253C48334 /* BoardSearchField.swift */,
+				4F50C1F11111111111111111 /* FieldSearchField.swift */,
+				B650C1F11111111111111111 /* IssueSearchField.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -238,6 +244,8 @@
 				64D3A6F469913D9AAA84D53A /* DashboardModels.swift in Sources */,
 				6C926497D1DF9BF3062D549C /* DashboardService.swift in Sources */,
 				2A41979C8E61017979070FEB /* DashboardView.swift in Sources */,
+				4F50C1F01111111111111111 /* FieldSearchField.swift in Sources */,
+				B650C1F01111111111111111 /* IssueSearchField.swift in Sources */,
 				90F92D70CAEF7B4F601A800A /* JiraModels.swift in Sources */,
 				64244527F131FE5C2414553E /* JiraService.swift in Sources */,
 				83B3292E056AD537AFF4BEB4 /* JyraApp.swift in Sources */,

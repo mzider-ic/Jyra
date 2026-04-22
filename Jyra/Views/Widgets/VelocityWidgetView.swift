@@ -125,7 +125,7 @@ struct VelocityWidgetView: View {
     private var expandedSheet: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("\(config.boardName) — Velocity")
+                Text("\(config.displayTitle) — Velocity")
                     .font(.title3.bold())
                 Spacer()
                 Button("Done") { showExpanded = false }

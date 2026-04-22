@@ -93,6 +93,18 @@ enum WidgetConfig: Codable, Equatable {
 struct VelocityConfig: Codable, Equatable {
     var boardId: Int
     var boardName: String
+    var title: String
+
+    init(boardId: Int, boardName: String, title: String = "") {
+        self.boardId = boardId
+        self.boardName = boardName
+        self.title = title
+    }
+
+    var displayTitle: String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? boardName : trimmed
+    }
 }
 
 struct BurndownConfig: Codable, Equatable {
@@ -118,11 +130,74 @@ struct BurndownConfig: Codable, Equatable {
 
 struct ProjectBurnRateConfig: Codable, Equatable {
     var projectName: String
-    var totalPoints: Double
-    var teams: [TeamEntry]
+    var teamBoardId: Int?
+    var teamBoardName: String
+    var pointsField: String
+    var pointsFieldName: String
+    var parentIssues: [ScopeIssue]
 
-    struct TeamEntry: Codable, Equatable, Identifiable {
-        var id: String = UUID().uuidString
+    init(
+        projectName: String,
+        teamBoardId: Int? = nil,
+        teamBoardName: String = "",
+        pointsField: String = "story_points",
+        pointsFieldName: String = "Story Points",
+        parentIssues: [ScopeIssue] = []
+    ) {
+        self.projectName = projectName
+        self.teamBoardId = teamBoardId
+        self.teamBoardName = teamBoardName
+        self.pointsField = pointsField
+        self.pointsFieldName = pointsFieldName
+        self.parentIssues = parentIssues
+    }
+
+    struct ScopeIssue: Codable, Equatable, Identifiable {
+        var id: String { key }
+        var key: String
+        var summary: String
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case projectName
+        case teamBoardId
+        case teamBoardName
+        case pointsField
+        case pointsFieldName
+        case parentIssues
+        case totalPoints
+        case teams
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        projectName = try c.decode(String.self, forKey: .projectName)
+        teamBoardId = try c.decodeIfPresent(Int.self, forKey: .teamBoardId)
+        teamBoardName = try c.decodeIfPresent(String.self, forKey: .teamBoardName) ?? ""
+        pointsField = try c.decodeIfPresent(String.self, forKey: .pointsField) ?? "story_points"
+        pointsFieldName = try c.decodeIfPresent(String.self, forKey: .pointsFieldName) ?? "Story Points"
+        parentIssues = try c.decodeIfPresent([ScopeIssue].self, forKey: .parentIssues) ?? []
+
+        // Backward compatibility for previously saved configs.
+        if teamBoardId == nil,
+           let legacyTeams = try c.decodeIfPresent([LegacyTeamEntry].self, forKey: .teams),
+           let firstTeam = legacyTeams.first {
+            teamBoardId = firstTeam.boardId
+            teamBoardName = firstTeam.name
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(projectName, forKey: .projectName)
+        try c.encodeIfPresent(teamBoardId, forKey: .teamBoardId)
+        try c.encode(teamBoardName, forKey: .teamBoardName)
+        try c.encode(pointsField, forKey: .pointsField)
+        try c.encode(pointsFieldName, forKey: .pointsFieldName)
+        try c.encode(parentIssues, forKey: .parentIssues)
+    }
+
+    private struct LegacyTeamEntry: Codable {
         var boardId: Int
         var name: String
     }

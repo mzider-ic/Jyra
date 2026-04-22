@@ -49,6 +49,17 @@ struct JiraField: Decodable, Identifiable {
 struct VelocityResponse: Decodable {
     let sprints: [SprintRef]
     let velocityStatEntries: [String: VelocityStats]
+    let transactionId: String?
+
+    init(
+        sprints: [SprintRef],
+        velocityStatEntries: [String: VelocityStats],
+        transactionId: String?
+    ) {
+        self.sprints = sprints
+        self.velocityStatEntries = velocityStatEntries
+        self.transactionId = transactionId
+    }
 
     struct SprintRef: Decodable {
         let id: Int
@@ -63,6 +74,22 @@ struct VelocityResponse: Decodable {
         struct PointValue: Decodable {
             let value: Double
         }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sprints
+        case velocityStatEntries
+        case transactionId
+        case transactionid
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sprints = try c.decodeIfPresent([SprintRef].self, forKey: .sprints) ?? []
+        velocityStatEntries = try c.decodeIfPresent([String: VelocityStats].self, forKey: .velocityStatEntries) ?? [:]
+        transactionId =
+            try c.decodeIfPresent(String.self, forKey: .transactionId) ??
+            (try c.decodeIfPresent(String.self, forKey: .transactionid))
     }
 }
 
@@ -120,10 +147,41 @@ struct ProjectBurnPoint: Identifiable {
 
 struct ProjectBurnResult {
     let points: [ProjectBurnPoint]
-    let teams: [TeamVelocitySummary]
+    let team: TeamVelocitySummary
     let combinedVelocity: Double
     let totalPoints: Double
     let sprintsRemaining: Int
+    let scopeIssues: [ProjectScopeIssue]
+}
+
+struct ProjectScopeIssue: Identifiable {
+    let id: String
+    let key: String
+    let summary: String
+    let pointValue: Double
+}
+
+struct JiraIssue: Identifiable, Hashable {
+    let id: String
+    let key: String
+    let summary: String
+    let issueTypeName: String?
+    let parentKey: String?
+    let storyPoints: Double?
+}
+
+struct JiraIssuePickerResponse: Decodable {
+    let sections: [Section]
+
+    struct Section: Decodable {
+        let issues: [Issue]
+    }
+
+    struct Issue: Decodable, Hashable {
+        let id: String
+        let key: String
+        let summary: String
+    }
 }
 
 // MARK: - Issue response for burndown
