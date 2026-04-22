@@ -12,7 +12,16 @@
       "Bash(kill %1)",
       "Bash(echo \"PID=$!\")",
       "Read(//tmp/**)",
-      "mcp__dual-graph__graph_add_memory"
+      "mcp__dual-graph__graph_add_memory",
+      "Bash(chmod +x *)",
+      "Bash(rtk du *)",
+      "Bash(cp -r .next/standalone/. dist/jyra/)",
+      "Bash(cp -r .next/static dist/jyra/.next/static)",
+      "Bash(node *)",
+      "Bash(brew --version)",
+      "Bash(rtk brew *)",
+      "Bash(xcodegen generate *)",
+      "Bash(xcodebuild -project Jyra.xcodeproj -scheme Jyra -destination \"platform=macOS\" build)"
     ]
   },
   "hooks": {

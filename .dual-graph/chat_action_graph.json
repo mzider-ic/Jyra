@@ -24,6 +24,13 @@
       "meta": {
         "text": "gitignore project files"
       }
+    },
+    {
+      "id": "query:swift macos app services views configservice jiraservice dashboardservice",
+      "type": "query",
+      "meta": {
+        "text": "Swift macOS app services views ConfigService JiraService DashboardService"
+      }
     }
   ],
   "edges": [
@@ -44,6 +51,12 @@
       "to": "CLAUDE.md",
       "rel": "retrieved",
       "ts": 1776816942
+    },
+    {
+      "from": "query:swift macos app services views configservice jiraservice dashboardservice",
+      "to": "CLAUDE.md",
+      "rel": "retrieved",
+      "ts": 1776860451
     }
   ],
   "files": {},
@@ -70,6 +83,14 @@
       "payload": {
         "kind": "retrieve",
         "query": "gitignore project files"
+      }
+    },
+    {
+      "ts": 1776860451,
+      "kind": "retrieve",
+      "payload": {
+        "kind": "retrieve",
+        "query": "Swift macOS app services views ConfigService JiraService DashboardService"
       }
     }
   ]

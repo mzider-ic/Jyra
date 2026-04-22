@@ -1,21 +1,16 @@
-# ── Next.js ───────────────────────────────────────────────────────────────
-.next/
-out/
-next-env.d.ts
-*.tsbuildinfo
+# ── Xcode ─────────────────────────────────────────────────────────────────
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcworkspace/contents.xcworkspacedata
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xcarchive
 
-# ── Dependencies ──────────────────────────────────────────────────────────
-node_modules/
-
-# ── Environment / secrets ─────────────────────────────────────────────────
-# Jira credentials live in ~/.config/jyra/ — never in the repo.
-# Guard against accidental .env files anyway.
-.env
-.env.local
-.env.*.local
-.env.development.local
-.env.test.local
-.env.production.local
+# ── Swift Package Manager ─────────────────────────────────────────────────
+.build/
+.swiftpm/
 
 # ── macOS ─────────────────────────────────────────────────────────────────
 .DS_Store
@@ -23,12 +18,6 @@ node_modules/
 .AppleDouble
 .LSOverride
 ._*
-
-# ── Logs ──────────────────────────────────────────────────────────────────
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # ── Editor / IDE ──────────────────────────────────────────────────────────
 .vscode/
@@ -40,11 +29,3 @@ yarn-error.log*
 # ── OS / misc ─────────────────────────────────────────────────────────────
 Thumbs.db
 Desktop.ini
-
-# ── Test / coverage output ────────────────────────────────────────────────
-coverage/
-.nyc_output/
-
-# ── Tooling caches ────────────────────────────────────────────────────────
-.eslintcache
-.cache/
