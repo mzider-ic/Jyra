@@ -12,18 +12,22 @@ struct WidgetConfigView: View {
     @State private var burndownConfig: BurndownConfig?
     @State private var projectConfig: ProjectBurnRateConfig?
 
-    @State private var boards: [JiraBoard] = []
     @State private var sprints: [JiraSprint] = []
     @State private var fields: [JiraField] = []
     @State private var isLoading = false
+
+    // Team management
+    @State private var isAddingTeam = false
+    @State private var newTeamName = ""
+    @State private var newTeamBoard: JiraBoard? = nil
 
     init(widget: Widget, dashboard: Binding<Dashboard>) {
         self.widget = widget
         self._dashboard = dashboard
         self._size = State(initialValue: widget.size)
         switch widget.config {
-        case .velocity(let c): self._velocityConfig = State(initialValue: c)
-        case .burndown(let c): self._burndownConfig = State(initialValue: c)
+        case .velocity(let c):       self._velocityConfig = State(initialValue: c)
+        case .burndown(let c):       self._burndownConfig = State(initialValue: c)
         case .projectBurnRate(let c): self._projectConfig = State(initialValue: c)
         }
     }
@@ -55,51 +59,56 @@ struct WidgetConfigView: View {
             }
         }
         .padding(24)
-        .frame(width: 480, height: 420)
-        .task { await loadOptions() }
+        .frame(width: 480, height: 520)
+        .task { await loadSecondaryOptions() }
     }
 
     @ViewBuilder
     private var configFields: some View {
         switch widget.type {
-        case .velocity:
-            if velocityConfig != nil {
-                velocityFields()
-            }
-        case .burndown:
-            if burndownConfig != nil {
-                burndownFields()
-            }
-        case .projectBurnRate:
-            if projectConfig != nil {
-                projectFields()
-            }
+        case .velocity:       velocityFields()
+        case .burndown:       burndownFields()
+        case .projectBurnRate: projectFields()
         }
     }
 
+    // MARK: - Velocity
+
     private func velocityFields() -> some View {
-        boardPicker(selectedBoardId: Binding(
-            get: { velocityConfig?.boardId ?? 0 },
-            set: { id in
-                if let board = boards.first(where: { $0.id == id }) {
-                    velocityConfig = VelocityConfig(boardId: board.id, boardName: board.name)
-                }
-            }
-        ))
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Board").font(.subheadline.bold())
+            BoardSearchField(
+                selectedBoard: boardBinding(
+                    get: { velocityConfig.map { JiraBoard(id: $0.boardId, name: $0.boardName, type: "") } },
+                    set: { board in
+                        guard let board else { return }
+                        velocityConfig = VelocityConfig(boardId: board.id, boardName: board.name)
+                    }
+                )
+            )
+        }
     }
+
+    // MARK: - Burndown
 
     private func burndownFields() -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            boardPicker(selectedBoardId: Binding(
-                get: { burndownConfig?.boardId ?? 0 },
-                set: { id in
-                    if let board = boards.first(where: { $0.id == id }) {
-                        burndownConfig?.boardId = board.id
-                        burndownConfig?.boardName = board.name
-                        Task { await loadSprints(boardId: board.id) }
-                    }
-                }
-            ))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Board").font(.subheadline.bold())
+                BoardSearchField(
+                    selectedBoard: boardBinding(
+                        get: { burndownConfig.map { JiraBoard(id: $0.boardId, name: $0.boardName, type: "") } },
+                        set: { board in
+                            guard let board else { return }
+                            if burndownConfig?.boardId != board.id {
+                                burndownConfig?.boardId = board.id
+                                burndownConfig?.boardName = board.name
+                                Task { await loadSprints(boardId: board.id) }
+                            }
+                        }
+                    )
+                )
+            }
 
             Picker("Sprint", selection: Binding(
                 get: { burndownConfig?.sprintId.displayValue ?? "active" },
@@ -119,15 +128,27 @@ struct WidgetConfigView: View {
                 }
             }
 
-            pointsFieldPicker(selectedField: Binding(
-                get: { burndownConfig?.pointsField ?? "" },
-                set: { id in
-                    burndownConfig?.pointsField = id
-                    burndownConfig?.pointsFieldName = fields.first(where: { $0.id == id })?.name ?? id
+            let storyFields = fields.filter {
+                $0.name.localizedCaseInsensitiveContains("point") ||
+                $0.name.localizedCaseInsensitiveContains("story")
+            }
+            if !storyFields.isEmpty {
+                Picker("Points Field", selection: Binding(
+                    get: { burndownConfig?.pointsField ?? "" },
+                    set: { id in
+                        burndownConfig?.pointsField = id
+                        burndownConfig?.pointsFieldName = fields.first(where: { $0.id == id })?.name ?? id
+                    }
+                )) {
+                    ForEach(storyFields) { field in
+                        Text(field.name).tag(field.id)
+                    }
                 }
-            ))
+            }
         }
     }
+
+    // MARK: - Project Burn Rate
 
     private func projectFields() -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -147,31 +168,86 @@ struct WidgetConfigView: View {
                 .frame(width: 100)
             }
 
-            Text("Teams: \(projectConfig?.teams.count ?? 0) configured")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Divider()
 
-            Text("Add teams by editing widget configuration in future updates.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
+            Text("Teams").font(.subheadline.bold())
 
-    private func boardPicker(selectedBoardId: Binding<Int>) -> some View {
-        Picker("Board", selection: selectedBoardId) {
-            ForEach(boards) { board in
-                Text(board.name).tag(board.id)
+            if let teams = projectConfig?.teams, !teams.isEmpty {
+                teamList(teams: teams)
+            }
+
+            if isAddingTeam {
+                addTeamForm
+            } else {
+                Button {
+                    isAddingTeam = true
+                    newTeamName = ""
+                    newTeamBoard = nil
+                } label: {
+                    Label("Add Team", systemImage: "plus")
+                }
+                .buttonStyle(.borderless)
             }
         }
     }
 
-    private func pointsFieldPicker(selectedField: Binding<String>) -> some View {
-        let storyFields = fields.filter { $0.name.localizedCaseInsensitiveContains("point") || $0.name.localizedCaseInsensitiveContains("story") }
-        return Picker("Points Field", selection: selectedField) {
-            ForEach(storyFields) { field in
-                Text(field.name).tag(field.id)
+    private func teamList(teams: [ProjectBurnRateConfig.TeamEntry]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(teams) { team in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(team.name).font(.subheadline)
+                        Text("Board #\(team.boardId)").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(role: .destructive) {
+                        projectConfig?.teams.removeAll { $0.id == team.id }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.red)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                if team.id != teams.last?.id { Divider().padding(.leading, 10) }
             }
         }
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(8)
+    }
+
+    private var addTeamForm: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Team name", text: $newTeamName)
+                .textFieldStyle(.roundedBorder)
+            BoardSearchField(selectedBoard: $newTeamBoard, label: "Board")
+            HStack {
+                Button("Cancel") { isAddingTeam = false }
+                    .buttonStyle(.borderless)
+                Spacer()
+                Button("Add Team") {
+                    guard let board = newTeamBoard,
+                          !newTeamName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                    projectConfig?.teams.append(
+                        ProjectBurnRateConfig.TeamEntry(boardId: board.id, name: newTeamName)
+                    )
+                    isAddingTeam = false
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(newTeamBoard == nil || newTeamName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.2)))
+    }
+
+    // MARK: - Helpers
+
+    private func boardBinding(get: @escaping () -> JiraBoard?, set: @escaping (JiraBoard?) -> Void) -> Binding<JiraBoard?> {
+        Binding(get: get, set: set)
     }
 
     private func save() {
@@ -188,24 +264,13 @@ struct WidgetConfigView: View {
         dashboardService.updateWidget(updated, in: dashboard)
     }
 
-    private func loadOptions() async {
-        guard let cfg = configService.config else { return }
+    private func loadSecondaryOptions() async {
+        guard let cfg = configService.config, case .burndown = widget.type else { return }
         isLoading = true
         defer { isLoading = false }
-        let service = JiraService(config: cfg)
-        async let b = service.fetchBoards()
-        async let f = service.fetchFields()
-        boards = (try? await b) ?? []
-        fields = (try? await f) ?? []
-
-        let boardId: Int?
-        switch widget.config {
-        case .velocity(let c): boardId = c.boardId
-        case .burndown(let c): boardId = c.boardId
-        case .projectBurnRate: boardId = nil
-        }
-        if let bid = boardId {
-            await loadSprints(boardId: bid)
+        fields = (try? await JiraService(config: cfg).fetchFields()) ?? []
+        if let boardId = burndownConfig?.boardId {
+            await loadSprints(boardId: boardId)
         }
     }
 

@@ -132,10 +132,9 @@ struct AddWidgetSheet: View {
 
     @State private var selectedType: WidgetType = .velocity
     @State private var size: WidgetSize = .half
-    @State private var boards: [JiraBoard] = []
     @State private var selectedBoard: JiraBoard? = nil
-    @State private var isLoading = false
-    @State private var error: String? = nil
+    @State private var projectName = "My Project"
+    @State private var totalPoints: Double = 100
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -147,6 +146,7 @@ struct AddWidgetSheet: View {
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: selectedType) { _, _ in selectedBoard = nil }
 
             Text(selectedType.description)
                 .font(.subheadline)
@@ -159,17 +159,17 @@ struct AddWidgetSheet: View {
             }
             .pickerStyle(.segmented)
 
-            if isLoading {
-                ProgressView("Loading boards…")
-            } else if let err = error {
-                Text(err).foregroundStyle(.red).font(.caption)
-            } else if !boards.isEmpty {
-                Picker("Board", selection: $selectedBoard) {
-                    Text("Select a board").tag(Optional<JiraBoard>.none)
-                    ForEach(boards) { board in
-                        Text(board.name).tag(Optional(board))
-                    }
+            if selectedType == .projectBurnRate {
+                TextField("Project name", text: $projectName)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Text("Total points")
+                    TextField("e.g. 500", value: $totalPoints, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
                 }
+            } else {
+                BoardSearchField(selectedBoard: $selectedBoard)
             }
 
             HStack {
@@ -177,24 +177,11 @@ struct AddWidgetSheet: View {
                 Button("Cancel") { dismiss() }
                 Button("Add") { addWidget(); dismiss() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(selectedBoard == nil && selectedType != .projectBurnRate)
+                    .disabled(selectedType != .projectBurnRate && selectedBoard == nil)
             }
         }
         .padding(24)
         .frame(width: 420)
-        .task { await loadBoards() }
-    }
-
-    private func loadBoards() async {
-        guard let cfg = configService.config else { return }
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            boards = try await JiraService(config: cfg).fetchBoards()
-            selectedBoard = boards.first
-        } catch {
-            self.error = error.localizedDescription
-        }
     }
 
     private func addWidget() {
@@ -208,12 +195,11 @@ struct AddWidgetSheet: View {
             config = .burndown(BurndownConfig(boardId: board.id, boardName: board.name))
         case .projectBurnRate:
             config = .projectBurnRate(ProjectBurnRateConfig(
-                projectName: "My Project",
-                totalPoints: 100,
+                projectName: projectName,
+                totalPoints: totalPoints,
                 teams: []
             ))
         }
-        let widget = Widget(type: selectedType, size: size, config: config)
-        dashboardService.addWidget(widget, to: dashboard)
+        dashboardService.addWidget(Widget(type: selectedType, size: size, config: config), to: dashboard)
     }
 }

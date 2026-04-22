@@ -13,6 +13,7 @@
 		2A41979C8E61017979070FEB /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F7818CD2D0A53A529F3242 /* DashboardView.swift */; };
 		37BCE4FAE445377D6425256F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517149259EA4FC686B868ABA /* ContentView.swift */; };
 		392C5ED91B8F0F8068FCA9A8 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27357B3E4FB7F3B6CC1BD92A /* SetupView.swift */; };
+		4A047A00B61C498AAED0F0CF /* BoardSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7157008BB68D44B253C48334 /* BoardSearchField.swift */; };
 		5B29FAE6797631E1752DF665 /* Charts.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DF726889D7D43F61D5A72426 /* Charts.framework */; };
 		5B32A8BD501C9ADF1B07EE2F /* ConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A486C11E57C99E68EBFC63 /* ConfigService.swift */; };
 		64244527F131FE5C2414553E /* JiraService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10250A20A651EEF24A547028 /* JiraService.swift */; };
@@ -36,6 +37,7 @@
 		4F7E51F0F7550228ADF66ED8 /* WidgetConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetConfigView.swift; sourceTree = "<group>"; };
 		517149259EA4FC686B868ABA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		5AC2BFABF7B83DC235406B3B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		7157008BB68D44B253C48334 /* BoardSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardSearchField.swift; sourceTree = "<group>"; };
 		73CAB50CF80A70D9AA9E136A /* Jyra.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Jyra.entitlements; sourceTree = "<group>"; };
 		7659BB2273A8141737EC6CB3 /* JyraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JyraApp.swift; sourceTree = "<group>"; };
 		7FC90C470D99D483E7FFC310 /* DashboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardService.swift; sourceTree = "<group>"; };
@@ -85,6 +87,14 @@
 			path = Jyra;
 			sourceTree = "<group>";
 		};
+		6AB76304059215BD287AFD00 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				7157008BB68D44B253C48334 /* BoardSearchField.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		6AC9080EBD16166D14DC7CE3 /* Services */ = {
 			isa = PBXGroup;
 			children = (
@@ -116,6 +126,7 @@
 			children = (
 				AD77A696EA09267ACE8F0171 /* Dashboard */,
 				C84D53A30D2322D13CC6B969 /* Setup */,
+				6AB76304059215BD287AFD00 /* Shared */,
 				AA3AC4E6234B02BF48A1E90A /* Widgets */,
 				5AC2BFABF7B83DC235406B3B /* SettingsView.swift */,
 			);
@@ -220,6 +231,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C0EDC127A39C7A3A6EB55E1A /* AppConfig.swift in Sources */,
+				4A047A00B61C498AAED0F0CF /* BoardSearchField.swift in Sources */,
 				E257E483271B221720EF42D3 /* BurndownWidgetView.swift in Sources */,
 				5B32A8BD501C9ADF1B07EE2F /* ConfigService.swift in Sources */,
 				37BCE4FAE445377D6425256F /* ContentView.swift in Sources */,

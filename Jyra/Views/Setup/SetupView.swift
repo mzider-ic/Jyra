@@ -107,8 +107,8 @@ struct SetupView: View {
         let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey)
         let service = JiraService(config: cfg)
         do {
-            let boards = try await service.fetchBoards()
-            testResult = .success("Connected — \(boards.count) board(s) found.")
+            let name = try await service.ping()
+            testResult = .success("Connected as \(name).")
         } catch {
             testResult = .failure(error.localizedDescription)
         }

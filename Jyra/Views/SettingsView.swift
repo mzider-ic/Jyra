@@ -83,9 +83,9 @@ struct SettingsView: View {
         defer { isTesting = false }
         let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey)
         do {
-            let boards = try await JiraService(config: cfg).fetchBoards()
+            let name = try await JiraService(config: cfg).ping()
             testSuccess = true
-            testResult = "OK — \(boards.count) boards"
+            testResult = "Connected as \(name)"
         } catch {
             testSuccess = false
             testResult = error.localizedDescription

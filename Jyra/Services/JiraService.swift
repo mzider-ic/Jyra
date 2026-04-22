@@ -11,20 +11,21 @@ actor JiraService {
         self.session = URLSession(configuration: cfg)
     }
 
+    // MARK: - Connection test
+
+    func ping() async throws -> String {
+        struct Myself: Decodable { let displayName: String }
+        let me: Myself = try await get("/rest/api/3/myself")
+        return me.displayName
+    }
+
     // MARK: - Boards
 
-    func fetchBoards() async throws -> [JiraBoard] {
-        var all: [JiraBoard] = []
-        var startAt = 0
-        repeat {
-            let resp: BoardsResponse = try await get("/rest/agile/1.0/board", query: [
-                "startAt": "\(startAt)", "maxResults": "50"
-            ])
-            all += resp.values
-            if resp.isLast { break }
-            startAt += resp.values.count
-        } while true
-        return all
+    func searchBoards(name: String = "") async throws -> [JiraBoard] {
+        var query: [String: String] = ["maxResults": "20"]
+        if !name.isEmpty { query["name"] = name }
+        let resp: BoardsResponse = try await get("/rest/agile/1.0/board", query: query)
+        return resp.values
     }
 
     // MARK: - Sprints
