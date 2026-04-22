@@ -100,6 +100,7 @@ struct VelocityEntry: Identifiable {
     let sprintName: String
     let startDate: Date?
     let endDate: Date?
+    let completeDate: Date?
     let committed: Double
     let completed: Double
     let isActive: Bool

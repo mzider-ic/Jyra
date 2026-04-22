@@ -123,6 +123,7 @@ actor JiraService {
                 sprintName: ref.name,
                 startDate: sprint?.startDate.flatMap { fmt.date(from: $0) },
                 endDate: sprint?.endDate.flatMap { fmt.date(from: $0) },
+                completeDate: sprint?.completeDate.flatMap { fmt.date(from: $0) },
                 committed: stats.estimated.value,
                 completed: stats.completed.value,
                 isActive: ref.id == activeSprintId
@@ -134,7 +135,9 @@ actor JiraService {
             entries.append(activeEntry)
         }
 
-        return entries.sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
+        return entries.sorted { lhs, rhs in
+            velocitySortDate(for: lhs) < velocitySortDate(for: rhs)
+        }
     }
 
     // MARK: - Sprint issues for burndown
@@ -414,10 +417,15 @@ actor JiraService {
             sprintName: activeSprint.name,
             startDate: activeSprint.startDate.flatMap { fmt.date(from: $0) },
             endDate: activeSprint.endDate.flatMap { fmt.date(from: $0) },
+            completeDate: activeSprint.completeDate.flatMap { fmt.date(from: $0) },
             committed: committed,
             completed: completed,
             isActive: true
         )
+    }
+
+    private func velocitySortDate(for entry: VelocityEntry) -> Date {
+        entry.completeDate ?? entry.endDate ?? entry.startDate ?? .distantPast
     }
 
     // MARK: - HTTP

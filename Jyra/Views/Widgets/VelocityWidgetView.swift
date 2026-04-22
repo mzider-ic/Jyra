@@ -60,9 +60,9 @@ struct VelocityWidgetView: View {
                 pointsChart(entries: entries)
                 completionChart(entries: entries)
             }
-            .frame(minHeight: 270)
+            .frame(minHeight: 290)
             .padding(.top, 12)
-            .padding(.bottom, 10)
+            .padding(.bottom, 18)
 
             legend
         }
@@ -182,23 +182,32 @@ struct VelocityWidgetView: View {
                 AxisValueLabel {
                     if let sprint = value.as(String.self) {
                         Text(shortSprintLabel(sprint))
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.black.opacity(0.4))
+                            )
                     }
                 }
+                AxisTick(length: 4)
             }
         }
         .chartPlotStyle { plot in
             plot
                 .padding(.top, 10)
-                .padding(.bottom, 6)
+                .padding(.bottom, 16)
                 .background(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.05), Color.white.opacity(0.015)],
+                        colors: [Color.black.opacity(0.32), Color.black.opacity(0.12)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -248,7 +257,7 @@ struct VelocityWidgetView: View {
         .chartPlotStyle { plot in
             plot
                 .padding(.top, 10)
-                .padding(.bottom, 6)
+                .padding(.bottom, 16)
                 .background(.clear)
         }
         .allowsHitTesting(false)
@@ -277,8 +286,8 @@ struct VelocityWidgetView: View {
     private func shortSprintLabel(_ name: String) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let words = trimmed.split(separator: " ")
-        if words.count <= 2 { return trimmed }
-        return words.suffix(2).joined(separator: " ")
+        if words.count <= 2 { return trimmed.replacingOccurrences(of: " ", with: "\n") }
+        return words.suffix(2).joined(separator: "\n")
     }
 
     private var expandedSheet: some View {
@@ -297,11 +306,25 @@ struct VelocityWidgetView: View {
     }
 
     private var displayEntries: [VelocityEntry] {
-        Array(entries.reversed().prefix(displayCount))
+        Array(orderedDisplayEntries.prefix(displayCount))
     }
 
     private var expandedEntries: [VelocityEntry] {
-        Array(entries.reversed().prefix(12))
+        Array(orderedDisplayEntries.prefix(12))
+    }
+
+    private var orderedDisplayEntries: [VelocityEntry] {
+        let activeEntries = entries.filter(\.isActive)
+        let historicalEntries = entries
+            .filter { !$0.isActive }
+            .sorted { lhs, rhs in
+                velocityDisplayDate(for: lhs) > velocityDisplayDate(for: rhs)
+            }
+        return activeEntries + historicalEntries
+    }
+
+    private func velocityDisplayDate(for entry: VelocityEntry) -> Date {
+        entry.completeDate ?? entry.endDate ?? entry.startDate ?? .distantPast
     }
 
     private func load() async {
