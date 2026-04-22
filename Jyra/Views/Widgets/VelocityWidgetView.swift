@@ -123,12 +123,12 @@ struct VelocityWidgetView: View {
 
     private func pointsChart(entries: [VelocityEntry]) -> some View {
         let avg = average(entries: entries)
-        let sprintDomain = entries.map(\.id)
+        let sprintDomain = entries.map(\.sprintName)
 
         return Chart {
             ForEach(entries) { entry in
                 BarMark(
-                    x: .value("Sprint", entry.id),
+                    x: .value("Sprint", entry.sprintName),
                     y: .value("Committed", entry.committed)
                 )
                 .position(by: .value("Series", "Committed"))
@@ -137,7 +137,7 @@ struct VelocityWidgetView: View {
                 .opacity(0.85)
 
                 BarMark(
-                    x: .value("Sprint", entry.id),
+                    x: .value("Sprint", entry.sprintName),
                     y: .value("Completed", entry.completed)
                 )
                 .position(by: .value("Series", "Completed"))
@@ -194,12 +194,12 @@ struct VelocityWidgetView: View {
     }
 
     private func completionChart(entries: [VelocityEntry]) -> some View {
-        let sprintDomain = entries.map(\.id)
+        let sprintDomain = entries.map(\.sprintName)
 
         return Chart {
             ForEach(entries) { entry in
                 LineMark(
-                    x: .value("Sprint", entry.id),
+                    x: .value("Sprint", entry.sprintName),
                     y: .value("Percent Complete", completionPercent(for: entry))
                 )
                 .interpolationMethod(.catmullRom)
@@ -207,7 +207,7 @@ struct VelocityWidgetView: View {
                 .lineStyle(StrokeStyle(lineWidth: 2.5))
 
                 PointMark(
-                    x: .value("Sprint", entry.id),
+                    x: .value("Sprint", entry.sprintName),
                     y: .value("Percent Complete", completionPercent(for: entry))
                 )
                 .foregroundStyle(palette.completionColor)
