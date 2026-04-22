@@ -60,9 +60,10 @@ struct VelocityWidgetView: View {
                 pointsChart(entries: entries)
                 completionChart(entries: entries)
             }
-            .frame(minHeight: 290)
+            .frame(minHeight: 270)
             .padding(.top, 12)
-            .padding(.bottom, 18)
+
+            sprintLabelRow(entries: entries)
 
             legend
         }
@@ -122,12 +123,12 @@ struct VelocityWidgetView: View {
 
     private func pointsChart(entries: [VelocityEntry]) -> some View {
         let avg = average(entries: entries)
-        let sprintDomain = entries.map(\.sprintName)
+        let sprintDomain = entries.map(\.id)
 
         return Chart {
             ForEach(entries) { entry in
                 BarMark(
-                    x: .value("Sprint", entry.sprintName),
+                    x: .value("Sprint", entry.id),
                     y: .value("Committed", entry.committed)
                 )
                 .position(by: .value("Series", "Committed"))
@@ -136,7 +137,7 @@ struct VelocityWidgetView: View {
                 .opacity(0.85)
 
                 BarMark(
-                    x: .value("Sprint", entry.sprintName),
+                    x: .value("Sprint", entry.id),
                     y: .value("Completed", entry.completed)
                 )
                 .position(by: .value("Series", "Completed"))
@@ -177,29 +178,10 @@ struct VelocityWidgetView: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
         }
-        .chartXAxis {
-            AxisMarks { value in
-                AxisValueLabel {
-                    if let sprint = value.as(String.self) {
-                        Text(shortSprintLabel(sprint))
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color.black.opacity(0.4))
-                            )
-                    }
-                }
-                AxisTick(length: 4)
-            }
-        }
+        .chartXAxis(.hidden)
         .chartPlotStyle { plot in
             plot
                 .padding(.top, 10)
-                .padding(.bottom, 16)
                 .background(
                     LinearGradient(
                         colors: [Color.black.opacity(0.32), Color.black.opacity(0.12)],
@@ -212,12 +194,12 @@ struct VelocityWidgetView: View {
     }
 
     private func completionChart(entries: [VelocityEntry]) -> some View {
-        let sprintDomain = entries.map(\.sprintName)
+        let sprintDomain = entries.map(\.id)
 
         return Chart {
             ForEach(entries) { entry in
                 LineMark(
-                    x: .value("Sprint", entry.sprintName),
+                    x: .value("Sprint", entry.id),
                     y: .value("Percent Complete", completionPercent(for: entry))
                 )
                 .interpolationMethod(.catmullRom)
@@ -225,7 +207,7 @@ struct VelocityWidgetView: View {
                 .lineStyle(StrokeStyle(lineWidth: 2.5))
 
                 PointMark(
-                    x: .value("Sprint", entry.sprintName),
+                    x: .value("Sprint", entry.id),
                     y: .value("Percent Complete", completionPercent(for: entry))
                 )
                 .foregroundStyle(palette.completionColor)
@@ -257,10 +239,32 @@ struct VelocityWidgetView: View {
         .chartPlotStyle { plot in
             plot
                 .padding(.top, 10)
-                .padding(.bottom, 16)
                 .background(.clear)
         }
         .allowsHitTesting(false)
+    }
+
+    private func sprintLabelRow(entries: [VelocityEntry]) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            ForEach(entries) { entry in
+                Text(shortSprintLabel(entry.sprintName))
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.96))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .top)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.black.opacity(0.62))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(.white.opacity(0.08), lineWidth: 1)
+                    )
+            }
+        }
+        .padding(.horizontal, 18)
     }
 
     private var palette: VelocityPalette {
@@ -287,7 +291,10 @@ struct VelocityWidgetView: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let words = trimmed.split(separator: " ")
         if words.count <= 2 { return trimmed.replacingOccurrences(of: " ", with: "\n") }
-        return words.suffix(2).joined(separator: "\n")
+        if words.count == 3 {
+            return "\(words[1])\n\(words[2])"
+        }
+        return "\(words[words.count - 2])\n\(words[words.count - 1])"
     }
 
     private var expandedSheet: some View {
@@ -318,7 +325,10 @@ struct VelocityWidgetView: View {
         let historicalEntries = entries
             .filter { !$0.isActive }
             .sorted { lhs, rhs in
-                velocityDisplayDate(for: lhs) > velocityDisplayDate(for: rhs)
+                if velocityDisplayDate(for: lhs) == velocityDisplayDate(for: rhs) {
+                    return lhs.id > rhs.id
+                }
+                return velocityDisplayDate(for: lhs) > velocityDisplayDate(for: rhs)
             }
         return activeEntries + historicalEntries
     }

@@ -113,7 +113,6 @@ actor JiraService {
         let activeSprintId = activeSprintInfo?.id ?? activeEntry?.id
 
         let sprintMap = Dictionary(uniqueKeysWithValues: allSprints.map { ($0.id, $0) })
-        let fmt = ISO8601DateFormatter()
 
         var entries = vel.sprints.compactMap { ref -> VelocityEntry? in
             guard let stats = vel.velocityStatEntries["\(ref.id)"] else { return nil }
@@ -121,9 +120,9 @@ actor JiraService {
             return VelocityEntry(
                 id: ref.id,
                 sprintName: ref.name,
-                startDate: sprint?.startDate.flatMap { fmt.date(from: $0) },
-                endDate: sprint?.endDate.flatMap { fmt.date(from: $0) },
-                completeDate: sprint?.completeDate.flatMap { fmt.date(from: $0) },
+                startDate: parseJiraDate(sprint?.startDate),
+                endDate: parseJiraDate(sprint?.endDate),
+                completeDate: parseJiraDate(sprint?.completeDate),
                 committed: stats.estimated.value,
                 completed: stats.completed.value,
                 isActive: ref.id == activeSprintId
@@ -405,7 +404,6 @@ actor JiraService {
             pointsField: pointsField.id
         )
 
-        let fmt = ISO8601DateFormatter()
         let committed = issues.issues.reduce(0.0) { $0 + ($1.fields.storyPoints ?? 0) }
         let completed = issues.issues.reduce(0.0) { partial, issue in
             let isDone = issue.fields.status.statusCategory.key == "done"
@@ -415,9 +413,9 @@ actor JiraService {
         return VelocityEntry(
             id: activeSprint.id,
             sprintName: activeSprint.name,
-            startDate: activeSprint.startDate.flatMap { fmt.date(from: $0) },
-            endDate: activeSprint.endDate.flatMap { fmt.date(from: $0) },
-            completeDate: activeSprint.completeDate.flatMap { fmt.date(from: $0) },
+            startDate: parseJiraDate(activeSprint.startDate),
+            endDate: parseJiraDate(activeSprint.endDate),
+            completeDate: parseJiraDate(activeSprint.completeDate),
             committed: committed,
             completed: completed,
             isActive: true
@@ -426,6 +424,33 @@ actor JiraService {
 
     private func velocitySortDate(for entry: VelocityEntry) -> Date {
         entry.completeDate ?? entry.endDate ?? entry.startDate ?? .distantPast
+    }
+
+    private func parseJiraDate(_ value: String?) -> Date? {
+        guard let value, !value.isEmpty else { return nil }
+
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) {
+            return date
+        }
+
+        let basic = ISO8601DateFormatter()
+        basic.formatOptions = [.withInternetDateTime]
+        if let date = basic.date(from: value) {
+            return date
+        }
+
+        let locale = Locale(identifier: "en_US_POSIX")
+
+        func parse(_ format: String) -> Date? {
+            let formatter = DateFormatter()
+            formatter.locale = locale
+            formatter.dateFormat = format
+            return formatter.date(from: value)
+        }
+
+        return parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ") ?? parse("yyyy-MM-dd'T'HH:mm:ssZ")
     }
 
     // MARK: - HTTP
