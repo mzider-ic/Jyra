@@ -30,6 +30,9 @@ DerivedData/
 Thumbs.db
 Desktop.ini
 
-#Dual-Graph
+# ── Dual Graph ─────────────────────────────────────────────────────────────
 .dual-graph/
 .dual-graph-context/
+.dual-graph/info_graph.json
+.dual-graph/mcp_server.pid
+.dual-graph/token_log.jsonl
