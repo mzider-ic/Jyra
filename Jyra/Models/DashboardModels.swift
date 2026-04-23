@@ -15,6 +15,7 @@ struct Widget: Identifiable, Codable, Equatable {
     var type: WidgetType
     var size: WidgetSize = .half
     var config: WidgetConfig
+    var customHeight: Double?
 }
 
 enum WidgetType: String, Codable, CaseIterable {

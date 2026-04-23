@@ -42,7 +42,17 @@ struct IssueSearchField: View {
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(issue.key).font(.subheadline.monospaced())
+                                    HStack(spacing: 6) {
+                                        Text(issue.key).font(.subheadline.monospaced())
+                                        if let sub = issue.subtitle, !sub.isEmpty {
+                                            Text(sub)
+                                                .font(.caption2)
+                                                .padding(.horizontal, 5)
+                                                .padding(.vertical, 2)
+                                                .background(Color.secondary.opacity(0.15), in: Capsule())
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
                                     Text(issue.summary)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)

@@ -201,9 +201,8 @@ actor JiraService {
             throw JiraError.sprintNotFound
         }
 
-        let fmt = ISO8601DateFormatter()
-        guard let startDate = sprint.startDate.flatMap({ fmt.date(from: $0) }),
-              let endDate = sprint.endDate.flatMap({ fmt.date(from: $0) }) else {
+        guard let startDate = parseJiraDate(sprint.startDate),
+              let endDate = parseJiraDate(sprint.endDate) else {
             throw JiraError.missingSprintDates
         }
 

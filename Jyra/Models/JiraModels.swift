@@ -95,7 +95,7 @@ struct VelocityResponse: Decodable {
 
 // MARK: - Processed models
 
-struct VelocityEntry: Identifiable {
+struct VelocityEntry: Identifiable, Equatable {
     let id: Int
     let sprintName: String
     let startDate: Date?
@@ -183,6 +183,7 @@ struct JiraIssuePickerResponse: Decodable {
         let id: String
         let key: String
         let summary: String
+        let subtitle: String?  // issue type (e.g. "Epic", "Story") returned by Jira picker
     }
 }
 

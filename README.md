@@ -80,14 +80,9 @@ All Jira access goes through [JiraService.swift](./Jyra/Services/JiraService.swi
 
 ### Velocity Fetching
 
-Velocity uses the older Greenhopper endpoint. Jira may return sprint data incrementally behind a `transactionId`, so Jyra now keeps calling the velocity endpoint until it stops receiving new sprint entries, then merges the results into one velocity dataset.
+Velocity uses the older Greenhopper endpoint. Jira may return sprint data incrementally behind a `transactionId`, so Jyra keeps calling the velocity endpoint until it stops receiving new sprint entries, then merges the results into one velocity dataset.
 
-That logic lives in:
-
-- [JiraService.swift](./Jyra/Services/JiraService.swift)
-- `fetchVelocity`
-- `fetchVelocityPage`
-- `fetchVelocityEntries`
+That logic lives in `JiraService`: `fetchVelocity`, `fetchVelocityPage`, `fetchVelocityEntries`.
 
 ### Story Point / Estimate Field Handling
 
@@ -108,8 +103,9 @@ Behavior:
 
 - fetches full velocity history for the board
 - matches sprint metadata from the Agile sprint endpoint
-- shows the most recent six sprints in the compact view
-- shows up to twelve in the expanded sheet
+- sprints with zero committed and zero completed points are excluded from the chart
+- shows the most recent six sprints in the compact view, up to twelve in the expanded sheet
+- active sprint appears on the far right; historical sprints run oldest-left to newest-right
 - falls back to the board name when no custom title is set
 
 Relevant files:
@@ -131,7 +127,7 @@ Behavior:
 
 - loads sprint issues from the Agile sprint issue API
 - computes total points, completed points, ideal line, actual remaining, and simple projection
-- requires sprint dates to be present in Jira
+- requires sprint `startDate` and `endDate` to be set in Jira; missing dates produce a `missingSprintDates` error
 
 Relevant files:
 
@@ -153,7 +149,8 @@ Behavior:
 
 - fetches recent team velocity from the selected board
 - searches selected scope issues using Jira issue picker
-- expands scope via JQL from the selected parents
+- expands scope via JQL from the selected parents (`parent in (...)`)
+- `"Epic Link" in (...)` is attempted and silently skipped on a 400, matching Jira Cloud behavior
 - sums the selected estimate field across matching child work
 - projects remaining scope against recent average velocity
 
@@ -162,6 +159,22 @@ Relevant files:
 - [ProjectBurnRateWidgetView.swift](./Jyra/Views/Widgets/ProjectBurnRateWidgetView.swift)
 - [IssueSearchField.swift](./Jyra/Views/Shared/IssueSearchField.swift)
 - [FieldSearchField.swift](./Jyra/Views/Shared/FieldSearchField.swift)
+
+## Widget Layout
+
+### Drag-and-Drop Reordering
+
+Widgets on a dashboard can be reordered by dragging. The drag handle (three-line icon in the widget header) signals the draggable area, but a drag initiated anywhere on the widget card works. The dragged widget fades to 40% opacity while in flight; on drop the order is persisted immediately.
+
+Implementation: [WidgetContainerView.swift](./Jyra/Views/Dashboard/WidgetContainerView.swift) — `WidgetDropDelegate` (conforms to `DropDelegate`) + `.onDrag`/`.onDrop` on each widget card.
+
+### Resize Handle
+
+Each widget card has a thin resize strip at the bottom. Drag it up or down to adjust the widget's height. The cursor changes to a vertical resize cursor on hover.
+
+- Minimum height: 160 pt
+- Default height when no resize has been applied: 260 pt
+- The chosen height is stored in `Widget.customHeight` and persisted to `dashboards.json`
 
 ## Widget Configuration UX
 
@@ -207,24 +220,81 @@ When the app starts without credentials:
 
 You can later update or clear the connection from Settings.
 
+## Local Development With The Mock Server
+
+The repo includes a Node.js mock Jira server (zero npm dependencies) for developing and testing widgets without a real Jira instance.
+
+### Starting The Server
+
+```bash
+bash mock-jira/start.sh
+```
+
+Runs on `http://localhost:3001`. Logs go to `/tmp/jyra-mock.log`.
+
+```bash
+bash mock-jira/stop.sh
+```
+
+### Xcode Integration
+
+Select the **Jyra (Mock)** scheme in Xcode. It:
+
+1. Runs `mock-jira/start.sh` before the app launches.
+2. Sets the environment variable `JYRA_MOCK_URL=http://localhost:3001`, which bypasses Keychain credential checks in `ConfigService`.
+3. Runs `mock-jira/stop.sh` when the app exits.
+
+No Jira credentials or network access are required when running under this scheme.
+
+### Mock Boards
+
+| ID  | Name            | Description |
+|-----|-----------------|-------------|
+| 101 | Lone Wolf       | 1 closed sprint + 1 active. Minimal data for quick sanity checks. |
+| 102 | Velocity Kings  | 12 closed sprints with wide variance: over-delivery (114%), a crash sprint (40%), and two perfect sprints (100%). Good for testing chart scaling and average lines. |
+| 103 | Zero Gap        | 7 closed sprints where sprint 4 has 0 committed and 0 completed points. The velocity widget must filter this sprint out. |
+| 104 | Steady Rhythms  | 5 closed sprints all completing at ~93–95%. Good for confirming a flat, consistent chart. |
+| 201 | No-Dates Team   | Sprints with `null` `startDate` and `endDate`. Velocity widget works normally. Burndown widget shows the expected "missing sprint dates" error, confirming that error path. |
+
+### Testing The Velocity Widget
+
+Add a velocity widget and select any board from 101–201. Board 102 (Velocity Kings) gives the most coverage: over-delivery, under-delivery, and consistent tail sprints all appear in one 12-sprint view.
+
+Board 103 (Zero Gap) verifies sprint exclusion — Sprint 4 must not appear in the chart or factor into the completion average.
+
+### Testing The Burndown Widget
+
+Add a burndown widget and select any board from 101–104. Issues across those boards have resolution dates spread across the past three days, producing a visible step-down curve rather than a single cliff drop.
+
+Board 201 (No-Dates Team) should produce the "Sprint is missing start or end dates" error, which confirms the error path renders correctly.
+
+### Testing The Project Burn Rate Widget
+
+1. Add a Project Burn Rate widget.
+2. In the configuration sheet, pick any board (101–104) as the **Team Board** — this drives the velocity side of the projection.
+3. In the **Scope** section, search for `JYRA` in the issue picker.
+4. Select **JYRA-1** (the "Platform Modernization" epic). The mock server resolves its child stories via `parent in ("JYRA-1")`, returning 8 stories totalling **76 story points**.
+5. The widget projects how many sprints the selected team needs to complete 76 points at their recent average velocity.
+
+Available scope issues:
+
+| Key    | Summary                     | Points |
+|--------|-----------------------------|--------|
+| JYRA-1 | Platform Modernization      | —      |
+| JYRA-2 | Migrate auth to JWT         | 13     |
+| JYRA-3 | API versioning support      | 8      |
+| JYRA-4 | Database connection pooling | 5      |
+| JYRA-5 | Redis caching layer         | 13     |
+| JYRA-6 | Background job queue        | 8      |
+| JYRA-7 | Audit logging service       | 5      |
+| JYRA-8 | Deploy pipeline v2          | 21     |
+| JYRA-9 | Performance benchmarks      | 3      |
+
 ## Current Assumptions And Limitations
 
 - The app is designed for Jira Cloud-style REST endpoints.
-- Project Burn Rate currently expands scope using:
-  - direct issue keys
-  - `parent in (...)`
-  - `"Epic Link" in (...)`
-- If a Jira instance uses different parent-link semantics, burn rate scope may need more JQL variants.
-- Burndown and burn rate both depend on choosing the correct estimate field for the Jira instance.
+- Project Burn Rate expands scope using direct issue keys and `parent in (...)`. If a Jira instance uses different parent-link semantics, additional JQL variants may be needed.
+- Burndown requires sprint `startDate` and `endDate` to be populated in Jira.
+- Burndown and Burn Rate both depend on choosing the correct estimate field for the Jira instance.
 - There are currently no automated tests in the repository.
-- Widget layout is persisted, but there is no backend or sync layer; all state is local to the Mac.
-
-## Notes For Future Work
-
-Areas that would benefit from hardening:
-
-- automated tests around `JiraService` response shaping
-- stronger error handling for unsupported Jira configurations
-- richer project burn rate scope expansion beyond `parent` and `Epic Link`
-- explicit refresh controls and caching strategy
-- drag/drop widget reordering in the dashboard UI
+- All state is local to the Mac; there is no backend or sync layer.

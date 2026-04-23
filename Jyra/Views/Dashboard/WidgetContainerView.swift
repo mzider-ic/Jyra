@@ -1,4 +1,37 @@
 import SwiftUI
+import UniformTypeIdentifiers
+
+// Listens for mouse-up to clear dragging state when a drag ends without hitting a drop target.
+// onEnd is stored as a @MainActor property so it never crosses an isolation boundary;
+// only a weak self reference (Sendable) is captured by the NSEvent handler.
+@MainActor
+private final class DragObserver: ObservableObject {
+    private var monitor: Any?
+    private var onEnd: (() -> Void)?
+
+    func begin(onEnd: @escaping () -> Void) {
+        end()
+        self.onEnd = onEnd
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
+            Task { @MainActor [weak self] in
+                // Defer slightly so DropDelegate.performDrop runs first on a valid drop.
+                try? await Task.sleep(for: .milliseconds(50))
+                self?.fire()
+            }
+            return event
+        }
+    }
+
+    private func fire() {
+        onEnd?()
+        end()
+    }
+
+    func end() {
+        onEnd = nil
+        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+    }
+}
 
 struct WidgetContainerView: View {
     @Binding var dashboard: Dashboard
@@ -6,6 +39,11 @@ struct WidgetContainerView: View {
     @Environment(DashboardService.self) private var dashboardService
     @State private var isAddingWidget = false
     @State private var configuringWidget: Widget? = nil
+    @State private var draggingId: String? = nil
+    @StateObject private var dragObserver = DragObserver()
+    @State private var resizingId: String? = nil
+    @State private var resizingStartHeight: Double = 0
+    @State private var resizingDelta: Double = 0
 
     private var columns: [GridItem] {
         [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
@@ -20,6 +58,8 @@ struct WidgetContainerView: View {
                     ForEach(dashboard.widgets) { widget in
                         widgetCard(widget)
                             .gridCellColumns(widget.size == .full ? 2 : 1)
+                            .opacity(draggingId == widget.id ? 0.4 : 1.0)
+                            .animation(.easeInOut(duration: 0.15), value: draggingId)
                     }
                 }
                 .padding(20)
@@ -53,15 +93,37 @@ struct WidgetContainerView: View {
             widgetHeader(widget)
             Divider()
             widgetBody(widget)
+            resizeHandle(widget)
         }
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+        .onDrag {
+            let id = widget.id
+            draggingId = id
+            dragObserver.begin {
+                // If performDrop already cleared draggingId, this is a no-op.
+                if draggingId == id { draggingId = nil }
+            }
+            return NSItemProvider(object: id as NSString)
+        }
+        .onDrop(
+            of: [UTType.text],
+            delegate: WidgetDropDelegate(
+                targetId: widget.id,
+                widgets: dashboard.widgets,
+                draggingId: $draggingId,
+                move: { dashboardService.moveWidget(in: dashboard, from: $0, to: $1) }
+            )
+        )
     }
 
     @ViewBuilder
     private func widgetHeader(_ widget: Widget) -> some View {
-        HStack {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.tertiary)
+                .font(.system(size: 11))
             Label(widgetTitle(widget), systemImage: widgetIcon(widget.type))
                 .font(.subheadline.bold())
             Spacer()
@@ -97,7 +159,48 @@ struct WidgetContainerView: View {
                     .environment(configService)
             }
         }
-        .frame(minHeight: 260)
+        .frame(minHeight: effectiveHeight(for: widget))
+    }
+
+    @ViewBuilder
+    private func resizeHandle(_ widget: Widget) -> some View {
+        HStack {
+            Spacer()
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 9))
+                .foregroundStyle(.quaternary)
+            Spacer()
+        }
+        .frame(height: 14)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 2)
+                .onChanged { value in
+                    if resizingId != widget.id {
+                        resizingId = widget.id
+                        resizingStartHeight = widget.customHeight ?? 260
+                        resizingDelta = 0
+                    }
+                    resizingDelta = value.translation.height
+                }
+                .onEnded { _ in
+                    let newHeight = max(160, resizingStartHeight + resizingDelta)
+                    var updated = widget
+                    updated.customHeight = newHeight
+                    dashboardService.updateWidget(updated, in: dashboard)
+                    resizingId = nil
+                    resizingDelta = 0
+                }
+        )
+        .onHover { isHovering in
+            if isHovering { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+        }
+    }
+
+    private func effectiveHeight(for widget: Widget) -> Double {
+        let base = widget.customHeight ?? 260
+        guard resizingId == widget.id else { return base }
+        return max(160, base + resizingDelta)
     }
 
     private func widgetIcon(_ type: WidgetType) -> String {
@@ -110,12 +213,9 @@ struct WidgetContainerView: View {
 
     private func widgetTitle(_ widget: Widget) -> String {
         switch widget.config {
-        case .velocity(let cfg):
-            return cfg.displayTitle
-        case .burndown(let cfg):
-            return cfg.boardName
-        case .projectBurnRate(let cfg):
-            return cfg.projectName
+        case .velocity(let cfg): return cfg.displayTitle
+        case .burndown(let cfg): return cfg.boardName
+        case .projectBurnRate(let cfg): return cfg.projectName
         }
     }
 
@@ -133,6 +233,39 @@ struct WidgetContainerView: View {
     }
 }
 
+// MARK: - Drop delegate
+
+struct WidgetDropDelegate: DropDelegate {
+    let targetId: String
+    let widgets: [Widget]
+    let draggingId: Binding<String?>
+    let move: (IndexSet, Int) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        draggingId.wrappedValue != nil && draggingId.wrappedValue != targetId
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let fromId = draggingId.wrappedValue,
+              fromId != targetId,
+              let fromIdx = widgets.firstIndex(where: { $0.id == fromId }),
+              let toIdx = widgets.firstIndex(where: { $0.id == targetId })
+        else {
+            draggingId.wrappedValue = nil
+            return false
+        }
+        withAnimation {
+            move(IndexSet(integer: fromIdx), toIdx > fromIdx ? toIdx + 1 : toIdx)
+        }
+        draggingId.wrappedValue = nil
+        return true
+    }
+}
+
 // MARK: - Add widget sheet
 
 struct AddWidgetSheet: View {
@@ -142,7 +275,7 @@ struct AddWidgetSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedType: WidgetType = .velocity
-    @State private var size: WidgetSize = .half
+    @State private var size: WidgetSize = .full
     @State private var selectedBoard: JiraBoard? = nil
     @State private var projectName = "My Project"
 
@@ -156,7 +289,10 @@ struct AddWidgetSheet: View {
                 }
             }
             .pickerStyle(.segmented)
-            .onChange(of: selectedType) { _, _ in selectedBoard = nil }
+            .onChange(of: selectedType) { _, newType in
+                selectedBoard = nil
+                size = newType == .velocity ? .full : .half
+            }
 
             Text(selectedType.description)
                 .font(.subheadline)
@@ -198,9 +334,7 @@ struct AddWidgetSheet: View {
             guard let board = selectedBoard else { return }
             config = .burndown(BurndownConfig(boardId: board.id, boardName: board.name))
         case .projectBurnRate:
-            config = .projectBurnRate(ProjectBurnRateConfig(
-                projectName: projectName
-            ))
+            config = .projectBurnRate(ProjectBurnRateConfig(projectName: projectName))
         }
         dashboardService.addWidget(Widget(type: selectedType, size: size, config: config), to: dashboard)
     }

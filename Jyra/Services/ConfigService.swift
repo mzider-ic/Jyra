@@ -35,6 +35,10 @@ final class ConfigService {
     }
 
     private func load() {
+        if let mockURL = ProcessInfo.processInfo.environment["JYRA_MOCK_URL"] {
+            config = AppConfig(jiraURL: mockURL, email: "mock@example.com", apiKey: "mock-key")
+            return
+        }
         guard
             let url = UserDefaults.standard.string(forKey: defaultsURL),
             let email = UserDefaults.standard.string(forKey: defaultsEmail),

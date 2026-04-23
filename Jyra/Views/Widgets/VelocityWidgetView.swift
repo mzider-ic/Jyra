@@ -1,6 +1,8 @@
 import SwiftUI
 import Charts
 
+// MARK: - Widget view (data loading, navigation)
+
 struct VelocityWidgetView: View {
     let config: VelocityConfig
     @Environment(ConfigService.self) private var configService
@@ -9,70 +11,132 @@ struct VelocityWidgetView: View {
     @State private var isLoading = false
     @State private var error: String? = nil
     @State private var showExpanded = false
-    @State private var hoveredSprint: String? = nil
 
     private let displayCount = 6
 
     var body: some View {
         Group {
             if isLoading {
-                loadingView
+                ProgressView("Loading velocity…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let err = error {
-                errorView(err)
+                VStack {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.red)
+                    Text(err).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Button("Retry") { Task { await load() } }.font(.caption)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if entries.isEmpty {
-                emptyView
+                ContentUnavailableView("No data", systemImage: "chart.bar")
             } else {
-                chartView(entries: displayEntries)
+                VelocityChartContent(entries: displayEntries, palette: palette)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, minHeight: 340, alignment: .top)
         .task { await load() }
         .onTapGesture { if !entries.isEmpty { showExpanded = true } }
         .sheet(isPresented: $showExpanded) {
-            expandedSheet
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("\(config.displayTitle) — Velocity").font(.title3.bold())
+                    Spacer()
+                    Button("Done") { showExpanded = false }
+                }
+                // Fresh struct instance → own @State → positions never contaminate compact view
+                VelocityChartContent(entries: expandedEntries, palette: palette)
+                    .frame(minHeight: 700)
+            }
+            .padding(24)
+            .frame(width: 760, height: 820)
         }
     }
 
-    private var loadingView: some View {
-        ProgressView("Loading velocity…")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    // MARK: - Ordering / Filtering
+
+    private var displayEntries: [VelocityEntry] {
+        Array(orderedDisplayEntries.prefix(displayCount))
     }
 
-    private func errorView(_ msg: String) -> some View {
-        VStack {
-            Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(.red)
-            Text(msg).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Retry") { Task { await load() } }.font(.caption)
+    private var expandedEntries: [VelocityEntry] {
+        Array(orderedDisplayEntries.prefix(12))
+    }
+
+    private var orderedDisplayEntries: [VelocityEntry] {
+        let activeEntries = entries.filter(\.isActive)
+        let historicalEntries = entries
+            .filter { !$0.isActive && ($0.committed > 0 || $0.completed > 0) }
+            .sorted { lhs, rhs in
+                if velocityDisplayDate(for: lhs) == velocityDisplayDate(for: rhs) {
+                    return lhs.id > rhs.id
+                }
+                return velocityDisplayDate(for: lhs) > velocityDisplayDate(for: rhs)
+            }
+        return historicalEntries.reversed() + activeEntries
+    }
+
+    private func velocityDisplayDate(for entry: VelocityEntry) -> Date {
+        entry.completeDate ?? entry.endDate ?? entry.startDate ?? .distantPast
+    }
+
+    private var palette: VelocityPalette {
+        config.paletteOverride ?? configService.config?.velocityPalette ?? .default
+    }
+
+    // MARK: - Load
+
+    private func load() async {
+        guard let cfg = configService.config else { return }
+        isLoading = true
+        error = nil
+        defer { isLoading = false }
+        do {
+            entries = try await JiraService(config: cfg).fetchVelocityEntries(boardId: config.boardId)
+        } catch {
+            self.error = error.localizedDescription
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
 
-    private var emptyView: some View {
-        ContentUnavailableView("No data", systemImage: "chart.bar")
-    }
+// MARK: - Chart content
+// A standalone View so each instance (compact / expanded) has completely isolated @State.
+// The expanded sheet creates a fresh VelocityChartContent, so label positions, hover state,
+// and slot width can never bleed across the two chart instances.
 
-    private func chartView(entries: [VelocityEntry]) -> some View {
+private struct VelocityChartContent: View {
+    let entries: [VelocityEntry]
+    let palette: VelocityPalette
+
+    @State private var labelXPositions: [String: CGFloat] = [:]
+    @State private var labelSlotWidth: CGFloat = 48
+    @State private var hoveredSprint: String? = nil
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            summaryRow(entries: entries)
+            summaryRow
 
-            ZStack {
-                pointsChart(entries: entries)
-                completionChart(entries: entries)
+            HStack(alignment: .top, spacing: 0) {
+                ZStack {
+                    pointsChart
+                    completionChart
+                }
+                completionPercentAxis
             }
             .frame(minHeight: 270)
             .padding(.top, 12)
 
-            sprintLabelRow(entries: entries)
-
+            sprintLabelRowAligned
             legend
         }
     }
 
-    private func summaryRow(entries: [VelocityEntry]) -> some View {
-        let avg = average(entries: entries)
-        let avgCompletion = averageCompletion(entries: entries)
+    // MARK: - Summary / Legend
+
+    private var summaryRow: some View {
+        let eligible = eligibleCompletionEntries
+        let avg = averageVelocity(entries: entries)
+        let avgCompletion = averageCompletion(entries: eligible)
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Last \(entries.count) sprints")
@@ -101,21 +165,25 @@ struct VelocityWidgetView: View {
 
     private func legendItem(color: Color, label: String) -> some View {
         HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 12, height: 8)
+            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 17, height: 8)
             Text(label).foregroundStyle(.secondary)
         }
     }
 
-    private func average(entries: [VelocityEntry]) -> Double {
+    // MARK: - Eligibility & Calculations
+
+    private var eligibleCompletionEntries: [VelocityEntry] {
+        entries.filter { !$0.isActive && $0.committed > 0 }
+    }
+
+    private func averageVelocity(entries: [VelocityEntry]) -> Double {
         guard !entries.isEmpty else { return 0 }
         return entries.map(\.completed).reduce(0, +) / Double(entries.count)
     }
 
-    // Only count sprints that are done and have committed points
     private func averageCompletion(entries: [VelocityEntry]) -> Double {
-        let eligible = entries.filter { !$0.isActive && $0.committed > 0 }
-        guard !eligible.isEmpty else { return 0 }
-        let percents = eligible.map(completionPercent(for:))
+        guard !entries.isEmpty else { return 0 }
+        let percents = entries.map(completionPercent(for:))
         return percents.reduce(0, +) / Double(percents.count)
     }
 
@@ -124,11 +192,47 @@ struct VelocityWidgetView: View {
         return min(100, max(0, (entry.completed / entry.committed) * 100))
     }
 
-    private func pointsChart(entries: [VelocityEntry]) -> some View {
-        let avg = average(entries: entries)
-        let sprintDomain = entries.map(\.sprintName)
-        // Phantom padding categories so bars never touch the left/right edges
-        let paddedDomain = ["__pad_l__"] + sprintDomain + ["__pad_r__"]
+    // MARK: - Shared Plot Style
+
+    private func basePlotStyle(_ plot: some View) -> some View {
+        plot
+            .padding(.top, 10)
+            .background(
+                LinearGradient(
+                    colors: [Color.black.opacity(0.32), Color.black.opacity(0.12)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Percent Axis (outside dark background)
+
+    private var completionPercentAxis: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.frame(height: 22)
+            Text("100%").font(.system(size: 9)).foregroundStyle(.secondary)
+            Spacer()
+            Text("75%").font(.system(size: 9)).foregroundStyle(.secondary)
+            Spacer()
+            Text("50%").font(.system(size: 9)).foregroundStyle(.secondary)
+            Spacer()
+            Text("25%").font(.system(size: 9)).foregroundStyle(.secondary)
+            Spacer()
+            Text("0%").font(.system(size: 9)).foregroundStyle(.secondary)
+            Color.clear.frame(height: 4)
+        }
+        .padding(.leading, 6)
+        .frame(width: 42)
+    }
+
+    // MARK: - Points Chart (Bar + Avg + hover)
+
+    private var pointsChart: some View {
+        let eligible = eligibleCompletionEntries
+        let avg = averageVelocity(entries: eligible)
+        let paddedDomain = ["__pad_l__"] + entries.map(\.sprintName) + ["__pad_r__"]
 
         return Chart {
             ForEach(entries) { entry in
@@ -149,6 +253,9 @@ struct VelocityWidgetView: View {
                             .fixedSize()
                     }
                 }
+                .annotation(position: .top) {
+                    if entry.isActive { activeSprintBadge }
+                }
 
                 BarMark(
                     x: .value("Sprint", entry.sprintName),
@@ -166,11 +273,6 @@ struct VelocityWidgetView: View {
                             .fixedSize()
                     }
                 }
-                .annotation(position: .top) {
-                    if entry.isActive {
-                        activeSprintBadge
-                    }
-                }
             }
 
             RuleMark(y: .value("Average", avg))
@@ -181,6 +283,12 @@ struct VelocityWidgetView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(palette.averageColor)
                 }
+
+            if let hovered = hoveredSprint {
+                RuleMark(x: .value("Sprint", hovered))
+                    .foregroundStyle(.white.opacity(0.15))
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+            }
         }
         .chartXScale(domain: paddedDomain)
         .chartYAxis {
@@ -189,33 +297,32 @@ struct VelocityWidgetView: View {
                     .foregroundStyle(.white.opacity(0.12))
                 AxisTick()
                 AxisValueLabel {
-                    if let points = value.as(Double.self) {
-                        Text("\(Int(points.rounded()))")
-                            .foregroundStyle(.secondary)
+                    if let pts = value.as(Double.self) {
+                        Text("\(Int(pts.rounded()))").foregroundStyle(.secondary)
                     }
                 }
             }
         }
         .chartYAxisLabel(position: .leading, alignment: .center) {
-            Text("Story Points")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
+            Text("Story Points").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
         }
         .chartXAxis(.hidden)
-        .chartPlotStyle { plot in
-            plot
-                .padding(.top, 10)
-                .background(
-                    LinearGradient(
-                        colors: [Color.black.opacity(0.32), Color.black.opacity(0.12)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
+        .chartPlotStyle { plot in basePlotStyle(plot) }
         .chartOverlay { proxy in
             GeometryReader { geo in
+                Color.clear
+                    .onAppear {
+                        DispatchQueue.main.async {
+                            refreshLabelPositions(proxy: proxy, geo: geo)
+                        }
+                    }
+                    .onChange(of: entries) {
+                        refreshLabelPositions(proxy: proxy, geo: geo)
+                    }
+                    .onChange(of: geo.size) {
+                        refreshLabelPositions(proxy: proxy, geo: geo)
+                    }
+
                 Rectangle()
                     .fill(.white.opacity(0.001))
                     .onContinuousHover { phase in
@@ -238,11 +345,28 @@ struct VelocityWidgetView: View {
         }
     }
 
-    private func completionChart(entries: [VelocityEntry]) -> some View {
-        // Only plot sprints that are done and have committed points
-        let eligible = entries.filter { !$0.isActive && $0.committed > 0 }
-        let sprintDomain = entries.map(\.sprintName)
-        let paddedDomain = ["__pad_l__"] + sprintDomain + ["__pad_r__"]
+    private func refreshLabelPositions(proxy: ChartProxy, geo: GeometryProxy) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let frame = geo[plotFrame]
+        var pos: [String: CGFloat] = [:]
+        var xs: [CGFloat] = []
+        for entry in entries {
+            if let x = proxy.position(forX: entry.sprintName) {
+                pos[entry.sprintName] = frame.minX + x
+                xs.append(x)
+            }
+        }
+        labelXPositions = pos
+        if xs.count >= 2 {
+            labelSlotWidth = (xs[1] - xs[0]) * 0.9
+        }
+    }
+
+    // MARK: - Completion Chart (line overlay, no axes)
+
+    private var completionChart: some View {
+        let eligible = eligibleCompletionEntries
+        let paddedDomain = ["__pad_l__"] + entries.map(\.sprintName) + ["__pad_r__"]
 
         return Chart {
             ForEach(eligible) { entry in
@@ -261,7 +385,7 @@ struct VelocityWidgetView: View {
                 )
                 .foregroundStyle(palette.completionColor)
                 .symbolSize(35)
-                .annotation(position: pct > 80 ? .bottom : .top) {
+                .annotation(position: pct > 80 ? .bottom : .top, alignment: .center) {
                     if entry.sprintName == hoveredSprint {
                         Text("\(Int(pct.rounded()))%")
                             .font(.system(size: 11, weight: .semibold))
@@ -275,76 +399,46 @@ struct VelocityWidgetView: View {
         }
         .chartXScale(domain: paddedDomain)
         .chartYScale(domain: 0...100)
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: [0, 25, 50, 75, 100]) { value in
-                AxisTick()
-                AxisValueLabel {
-                    if let percent = value.as(Int.self) {
-                        Text("\(percent)%")
-                            .foregroundStyle(.secondary)
-                    } else if let percent = value.as(Double.self) {
-                        Text("\(Int(percent.rounded()))%")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .chartYAxisLabel(position: .trailing, alignment: .center) {
-            Text("Percent Complete")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-        }
+        .chartYAxis(.hidden)
         .chartXAxis(.hidden)
         .chartPlotStyle { plot in
-            plot
-                .padding(.top, 10)
-                .background(.clear)
+            plot.padding(.top, 10).background(.clear)
         }
         .allowsHitTesting(false)
     }
 
-    private func sprintLabelRow(entries: [VelocityEntry]) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+    // MARK: - Labels Row
+
+    private var sprintLabelRowAligned: some View {
+        GeometryReader { geo in
             ForEach(entries) { entry in
-                Text(shortSprintLabel(entry.sprintName))
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.96))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .top)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.black.opacity(0.62))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(.white.opacity(0.08), lineWidth: 1)
-                    )
+                if let x = labelXPositions[entry.sprintName] {
+                    Text(shortSprintLabel(entry.sprintName))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.96))
+                        .multilineTextAlignment(.center)
+                        .frame(minWidth: labelSlotWidth, alignment: .center)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.62)))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.08), lineWidth: 1))
+                        .position(x: x, y: geo.size.height / 2)
+                }
             }
         }
-        .padding(.horizontal, 18)
-        // Render above the chart in the VStack — SwiftUI draws later siblings on top
+        .frame(height: 36)
         .zIndex(1)
     }
 
-    private var palette: VelocityPalette {
-        config.paletteOverride ?? configService.config?.velocityPalette ?? .default
-    }
+    // MARK: - Palette / Badge
 
     private var activeSprintBadge: some View {
         Text("Active")
             .font(.system(size: 9, weight: .semibold))
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(
-                Capsule()
-                    .fill(palette.completionColor.opacity(0.18))
-            )
-            .overlay(
-                Capsule()
-                    .stroke(palette.completionColor.opacity(0.6), lineWidth: 1)
-            )
+            .background(Capsule().fill(palette.completionColor.opacity(0.18)))
+            .overlay(Capsule().stroke(palette.completionColor.opacity(0.6), lineWidth: 1))
             .foregroundStyle(palette.completionColor)
     }
 
@@ -352,63 +446,7 @@ struct VelocityWidgetView: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let words = trimmed.split(separator: " ")
         if words.count <= 2 { return trimmed.replacingOccurrences(of: " ", with: "\n") }
-        if words.count == 3 {
-            return "\(words[1])\n\(words[2])"
-        }
+        if words.count == 3 { return "\(words[1])\n\(words[2])" }
         return "\(words[words.count - 2])\n\(words[words.count - 1])"
-    }
-
-    private var expandedSheet: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("\(config.displayTitle) — Velocity")
-                    .font(.title3.bold())
-                Spacer()
-                Button("Done") { showExpanded = false }
-            }
-            chartView(entries: expandedEntries)
-                .frame(minHeight: 500)
-        }
-        .padding(24)
-        .frame(width: 760, height: 620)
-    }
-
-    private var displayEntries: [VelocityEntry] {
-        Array(orderedDisplayEntries.prefix(displayCount))
-    }
-
-    private var expandedEntries: [VelocityEntry] {
-        Array(orderedDisplayEntries.prefix(12))
-    }
-
-    private var orderedDisplayEntries: [VelocityEntry] {
-        let activeEntries = entries.filter(\.isActive)
-        // Exclude sprints with no points at all
-        let historicalEntries = entries
-            .filter { !$0.isActive && ($0.committed > 0 || $0.completed > 0) }
-            .sorted { lhs, rhs in
-                if velocityDisplayDate(for: lhs) == velocityDisplayDate(for: rhs) {
-                    return lhs.id > rhs.id
-                }
-                return velocityDisplayDate(for: lhs) > velocityDisplayDate(for: rhs)
-            }
-        // Oldest historical on left, newest historical next, active sprint on far right
-        return historicalEntries.reversed() + activeEntries
-    }
-
-    private func velocityDisplayDate(for entry: VelocityEntry) -> Date {
-        entry.completeDate ?? entry.endDate ?? entry.startDate ?? .distantPast
-    }
-
-    private func load() async {
-        guard let cfg = configService.config else { return }
-        isLoading = true
-        error = nil
-        defer { isLoading = false }
-        do {
-            entries = try await JiraService(config: cfg).fetchVelocityEntries(boardId: config.boardId)
-        } catch {
-            self.error = error.localizedDescription
-        }
     }
 }
