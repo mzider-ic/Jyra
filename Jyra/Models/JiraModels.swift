@@ -130,37 +130,37 @@ struct BurndownResult {
     let pointsFieldName: String
 }
 
-struct TeamVelocitySummary: Identifiable {
-    let id: String
-    let boardId: Int
+// MARK: - Project burn-up
+
+struct SprintInfo: Hashable {
+    let id: Int
     let name: String
-    let avgVelocity: Double
-    let sprintLengthDays: Int
-    let recentSprints: [VelocityEntry]
+    let state: String   // "active" | "closed" | "future"
+    let startDate: Date?
+    let endDate: Date?
 }
 
-struct ProjectBurnPoint: Identifiable {
-    let id = UUID()
-    let label: String
-    let remaining: Double?
-    let projected: Double?
-    let isFuture: Bool
-}
-
-struct ProjectBurnResult {
-    let points: [ProjectBurnPoint]
-    let team: TeamVelocitySummary
-    let combinedVelocity: Double
-    let totalPoints: Double
-    let sprintsRemaining: Int
-    let scopeIssues: [ProjectScopeIssue]
-}
-
-struct ProjectScopeIssue: Identifiable {
+struct IssueForBurnUp: Identifiable {
     let id: String
     let key: String
     let summary: String
-    let pointValue: Double
+    let storyPoints: Double?
+    let isDone: Bool
+    let sprint: SprintInfo?
+}
+
+struct BurnUpPoint: Identifiable {
+    let id: String
+    let label: String
+    let sprintState: String?    // nil = backlog bucket
+    let totalScope: Double
+    let cumulativeCompleted: Double
+}
+
+struct BurnUpResult {
+    let points: [BurnUpPoint]
+    let totalScope: Double
+    let completedPoints: Double
 }
 
 struct JiraIssue: Identifiable, Hashable {

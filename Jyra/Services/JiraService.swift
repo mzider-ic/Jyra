@@ -304,80 +304,19 @@ actor JiraService {
         )
     }
 
-    // MARK: - Project burn rate
+    // MARK: - Project burn-up
 
-    func fetchProjectBurnRate(config: ProjectBurnRateConfig) async throws -> ProjectBurnResult {
-        guard let boardId = config.teamBoardId else {
-            return ProjectBurnResult(
-                points: [],
-                team: TeamVelocitySummary(
-                    id: "unconfigured",
-                    boardId: 0,
-                    name: config.teamBoardName,
-                    avgVelocity: 0,
-                    sprintLengthDays: 14,
-                    recentSprints: []
-                ),
-                combinedVelocity: 0,
-                totalPoints: 0,
-                sprintsRemaining: 0,
-                scopeIssues: []
-            )
+    func fetchBurnUp(config: ProjectBurnRateConfig) async throws -> BurnUpResult {
+        guard !config.parentIssues.isEmpty else {
+            return BurnUpResult(points: [], totalScope: 0, completedPoints: 0)
         }
-
-        async let entriesTask = fetchVelocityEntries(boardId: boardId)
-        async let scopeTask = fetchProjectScopeIssues(parentKeys: config.parentIssues.map(\.key), pointsField: config.pointsField)
-
-        let entries = try await entriesTask
-        let scopeIssues = try await scopeTask
-
-        let recent = Array(entries.suffix(6))
-        let avgVelocity = recent.isEmpty ? 0 : recent.map(\.completed).reduce(0, +) / Double(recent.count)
-
-        var sprintLength = 14
-        if let last = recent.last,
-           let start = last.startDate,
-           let end = last.endDate {
-            sprintLength = max(1, Calendar.current.dateComponents([.day], from: start, to: end).day ?? 14)
-        }
-
-        let teamSummary = TeamVelocitySummary(
-            id: "\(boardId)",
-            boardId: boardId,
-            name: config.teamBoardName,
-            avgVelocity: avgVelocity,
-            sprintLengthDays: sprintLength,
-            recentSprints: recent
+        let sprintField = try await fetchSprintField()
+        let issues = try await fetchChildIssues(
+            parentKeys: config.parentIssues.map(\.key),
+            pointsField: config.pointsField,
+            sprintField: sprintField
         )
-
-        let totalPoints = scopeIssues.reduce(0.0) { $0 + $1.pointValue }
-        let sprintsLeft = avgVelocity > 0 ? Int((totalPoints / avgVelocity).rounded(.up)) : 0
-
-        var burnPoints: [ProjectBurnPoint] = []
-        let remaining = totalPoints
-        for i in 0...max(sprintsLeft, 1) {
-            let isFuture = i > 0
-            let label = i == 0 ? "Now" : "Sprint +\(i)"
-            let projected: Double? = isFuture ? max(0, remaining - avgVelocity * Double(i)) : nil
-            burnPoints.append(ProjectBurnPoint(
-                label: label,
-                remaining: isFuture ? nil : remaining,
-                projected: projected,
-                isFuture: isFuture
-            ))
-        }
-
-        return ProjectBurnResult(
-            points: burnPoints,
-            team: teamSummary,
-            combinedVelocity: avgVelocity,
-            totalPoints: totalPoints,
-            sprintsRemaining: sprintsLeft,
-            scopeIssues: scopeIssues.sorted { lhs, rhs in
-                if lhs.pointValue == rhs.pointValue { return lhs.key < rhs.key }
-                return lhs.pointValue > rhs.pointValue
-            }
-        )
+        return buildBurnUp(issues: issues)
     }
 
     func searchIssuePicker(query: String) async throws -> [JiraIssuePickerResponse.Issue] {
@@ -462,39 +401,99 @@ actor JiraService {
         return try await get("/rest/greenhopper/1.0/rapid/charts/velocity", query: query)
     }
 
-    private func fetchProjectScopeIssues(parentKeys: [String], pointsField: String) async throws -> [ProjectScopeIssue] {
-        let normalizedKeys = Array(Set(parentKeys.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted()
-        guard !normalizedKeys.isEmpty else { return [] }
+    private func fetchSprintField() async throws -> String {
+        let fields = try await fetchFields()
+        return fields.first(where: { $0.custom && $0.name.localizedCaseInsensitiveContains("sprint") })?.id
+            ?? "customfield_10020"
+    }
 
-        var merged: [String: JiraIssue] = [:]
+    private func fetchChildIssues(parentKeys: [String], pointsField: String, sprintField: String) async throws -> [IssueForBurnUp] {
+        let keys = Array(Set(parentKeys.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted()
+        guard !keys.isEmpty else { return [] }
 
-        for issue in try await fetchIssuesByJQL(
-            "issuekey in (\(normalizedKeys.map(jqlQuote).joined(separator: ", ")))",
-            pointsField: pointsField
-        ) {
-            merged[issue.key] = issue
-        }
+        let quoted = keys.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ", ")
+        let jql = "parent in (\(quoted)) ORDER BY created ASC"
+        let fields = ["summary", "status", "issuetype", pointsField, sprintField]
 
-        for jql in childScopeJQLs(for: normalizedKeys) {
-            do {
-                let issues = try await fetchIssuesByJQL(jql, pointsField: pointsField)
-                for issue in issues {
-                    merged[issue.key] = issue
-                }
-            } catch JiraError.httpError(let code, _) where code == 400 {
-                continue
+        var all: [IssueForBurnUp] = []
+        var startAt = 0
+
+        repeat {
+            let payload = try await postJSON("/rest/api/3/search/jql", body: [
+                "jql": jql,
+                "fields": fields,
+                "maxResults": 100,
+                "startAt": startAt
+            ])
+
+            guard let issuesRaw = payload["issues"] as? [[String: Any]] else { break }
+            let total = payload["total"] as? Int ?? issuesRaw.count
+
+            for json in issuesRaw {
+                let f = json["fields"] as? [String: Any]
+                let statusKey = ((f?["status"] as? [String: Any])?["statusCategory"] as? [String: Any])?["key"] as? String
+                all.append(IssueForBurnUp(
+                    id: json["id"] as? String ?? UUID().uuidString,
+                    key: json["key"] as? String ?? "",
+                    summary: f?["summary"] as? String ?? "",
+                    storyPoints: parsePointValue(f?[pointsField]),
+                    isDone: statusKey == "done",
+                    sprint: parseSprintInfo(f?[sprintField])
+                ))
             }
+
+            if all.count >= total || issuesRaw.isEmpty { break }
+            startAt += issuesRaw.count
+        } while true
+
+        return all
+    }
+
+    private func parseSprintInfo(_ value: Any?) -> SprintInfo? {
+        let dict: [String: Any]?
+        if let arr = value as? [[String: Any]] { dict = arr.last }
+        else if let single = value as? [String: Any] { dict = single }
+        else { return nil }
+        guard let d = dict, let id = d["id"] as? Int else { return nil }
+        return SprintInfo(
+            id: id,
+            name: d["name"] as? String ?? "",
+            state: d["state"] as? String ?? "",
+            startDate: parseJiraDate(d["startDate"] as? String),
+            endDate: parseJiraDate(d["endDate"] as? String)
+        )
+    }
+
+    private func buildBurnUp(issues: [IssueForBurnUp]) -> BurnUpResult {
+        let totalScope = issues.reduce(0.0) { $0 + ($1.storyPoints ?? 0) }
+        let completedPoints = issues.filter(\.isDone).reduce(0.0) { $0 + ($1.storyPoints ?? 0) }
+
+        // Collect unique sprints ordered by start date
+        var sprintMap: [Int: SprintInfo] = [:]
+        var sprintIssues: [Int: [IssueForBurnUp]] = [:]
+        for issue in issues {
+            guard let s = issue.sprint else { continue }
+            sprintMap[s.id] = s
+            sprintIssues[s.id, default: []].append(issue)
         }
 
-        return merged.values.compactMap { issue in
-            guard let storyPoints = issue.storyPoints, storyPoints > 0 else { return nil }
-            return ProjectScopeIssue(
-                id: issue.id,
-                key: issue.key,
-                summary: issue.summary,
-                pointValue: storyPoints
-            )
+        let ordered = sprintMap.values.sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
+
+        var cumCompleted = 0.0
+        var points: [BurnUpPoint] = []
+        for sprint in ordered {
+            let done = sprintIssues[sprint.id, default: []].filter(\.isDone).reduce(0.0) { $0 + ($1.storyPoints ?? 0) }
+            cumCompleted += done
+            points.append(BurnUpPoint(
+                id: "\(sprint.id)",
+                label: sprint.name,
+                sprintState: sprint.state,
+                totalScope: totalScope,
+                cumulativeCompleted: cumCompleted
+            ))
         }
+
+        return BurnUpResult(points: points, totalScope: totalScope, completedPoints: completedPoints)
     }
 
     private func fetchPreferredPointsField() async throws -> JiraField? {
@@ -543,54 +542,21 @@ actor JiraService {
         return try JSONDecoder.jira.decode(T.self, from: data)
     }
 
-    private func fetchIssuesByJQL(_ jql: String, pointsField: String) async throws -> [JiraIssue] {
-        var allIssues: [JiraIssue] = []
-        var startAt = 0
-
-        repeat {
-            let payload: [String: Any] = try await getJSON(
-                "/rest/api/3/search",
-                query: [
-                    "jql": jql,
-                    "fields": "summary,issuetype,parent,\(pointsField)",
-                    "maxResults": "100",
-                    "startAt": "\(startAt)"
-                ]
-            )
-
-            guard let issues = payload["issues"] as? [[String: Any]] else { break }
-            let total = payload["total"] as? Int ?? issues.count
-            let parsed = issues.map { parseJiraIssue($0, pointsField: pointsField) }
-            allIssues += parsed
-
-            if allIssues.count >= total || issues.isEmpty {
-                break
-            }
-            startAt += issues.count
-        } while true
-
-        return allIssues
-    }
-
-    private func getJSON(_ path: String, query: [String: String] = [:]) async throws -> [String: Any] {
-        var components = URLComponents(url: config.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
-        if !query.isEmpty {
-            components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
-        }
-        guard let url = components.url else { throw JiraError.invalidURL }
-
+    private func postJSON(_ path: String, body: [String: Any]) async throws -> [String: Any] {
+        guard let url = config.baseURL.appendingPathComponent(path) as URL? else { throw JiraError.invalidURL }
         var request = URLRequest(url: url)
+        request.httpMethod = "POST"
         request.setValue(config.authHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await session.data(for: request)
-
         guard let http = response as? HTTPURLResponse else { throw JiraError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw JiraError.httpError(http.statusCode, body)
         }
-
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw JiraError.invalidResponse
         }
@@ -637,23 +603,6 @@ actor JiraService {
         return result as! T
     }
 
-    private func parseJiraIssue(_ json: [String: Any], pointsField: String) -> JiraIssue {
-        let fields = json["fields"] as? [String: Any]
-        let issueType = (fields?["issuetype"] as? [String: Any])?["name"] as? String
-        let parentKey = ((fields?["parent"] as? [String: Any])?["key"] as? String)
-        let summary = fields?["summary"] as? String ?? ""
-        let storyPoints = parsePointValue(fields?[pointsField])
-
-        return JiraIssue(
-            id: json["id"] as? String ?? UUID().uuidString,
-            key: json["key"] as? String ?? "",
-            summary: summary,
-            issueTypeName: issueType,
-            parentKey: parentKey,
-            storyPoints: storyPoints
-        )
-    }
-
     private func parsePointValue(_ value: Any?) -> Double? {
         if let value = value as? Double { return value }
         if let value = value as? Int { return Double(value) }
@@ -662,17 +611,6 @@ actor JiraService {
         return nil
     }
 
-    private func childScopeJQLs(for parentKeys: [String]) -> [String] {
-        let quotedKeys = parentKeys.map(jqlQuote).joined(separator: ", ")
-        return [
-            "parent in (\(quotedKeys))",
-            "\"Epic Link\" in (\(quotedKeys))"
-        ]
-    }
-
-    private func jqlQuote(_ value: String) -> String {
-        "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
-    }
 }
 
 extension JSONDecoder {

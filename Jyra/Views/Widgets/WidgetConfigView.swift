@@ -182,24 +182,7 @@ struct WidgetConfigView: View {
             .textFieldStyle(.roundedBorder)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Team").font(.subheadline.bold())
-                BoardSearchField(
-                    selectedBoard: boardBinding(
-                        get: {
-                            guard let config = projectConfig, let boardId = config.teamBoardId else { return nil }
-                            return JiraBoard(id: boardId, name: config.teamBoardName, type: "")
-                        },
-                        set: { board in
-                            projectConfig?.teamBoardId = board?.id
-                            projectConfig?.teamBoardName = board?.name ?? ""
-                        }
-                    ),
-                    label: "Team board"
-                )
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Estimate Field").font(.subheadline.bold())
+                Text("Story Points Field").font(.subheadline.bold())
                 FieldSearchField(
                     selectedField: Binding(
                         get: {
@@ -217,7 +200,7 @@ struct WidgetConfigView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Scope").font(.subheadline.bold())
+                Text("Epics / Scope").font(.subheadline.bold())
                 IssueSearchField(selectedIssues: Binding(
                     get: { projectConfig?.parentIssues ?? [] },
                     set: { projectConfig?.parentIssues = $0 }

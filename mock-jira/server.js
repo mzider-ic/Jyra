@@ -189,26 +189,47 @@ const ND_ACTIVE_ISSUES = makeIssues('ND', 5004, [
   { pts: 3, done: false },
 ])
 
-// ── Project issues for /rest/api/3/search and /issue/picker ──────────────────
-// Use these to test the Project Burn Rate widget.
-// Add JYRA-1 as scope, child stories (JYRA-2…JYRA-9) supply the point total.
+// ── Project issues for burn-up widget ─────────────────────────────────────────
+// Add JYRA-1 as scope in the widget config. Stories are spread across 3 sprints
+// so the burn-up chart has meaningful data to display.
+
+const JYRA_BURN_SPRINTS = [
+  { id: 500, name: 'Platform Sprint 1', state: 'closed',
+    startDate: daysAgo(56), endDate: daysAgo(42) },
+  { id: 501, name: 'Platform Sprint 2', state: 'closed',
+    startDate: daysAgo(42), endDate: daysAgo(28) },
+  { id: 502, name: 'Platform Sprint 3', state: 'active',
+    startDate: daysAgo(14), endDate: daysAgo(-0) },
+]
+
 const JYRA_EPIC = {
   id: 10001, key: 'JYRA-1', summary: 'Platform Modernization',
   issueType: 'Epic', parentKey: null, storyPoints: null,
+  status: 'In Progress', sprint: null,
 }
 const JYRA_STORIES = [
-  { id: 10002, key: 'JYRA-2', summary: 'Migrate auth to JWT',          issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 13 },
-  { id: 10003, key: 'JYRA-3', summary: 'API versioning support',        issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  8 },
-  { id: 10004, key: 'JYRA-4', summary: 'Database connection pooling',   issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  5 },
-  { id: 10005, key: 'JYRA-5', summary: 'Redis caching layer',           issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 13 },
-  { id: 10006, key: 'JYRA-6', summary: 'Background job queue',          issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  8 },
-  { id: 10007, key: 'JYRA-7', summary: 'Audit logging service',         issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  5 },
-  { id: 10008, key: 'JYRA-8', summary: 'Deploy pipeline v2',            issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 21 },
-  { id: 10009, key: 'JYRA-9', summary: 'Performance benchmarks',        issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  3 },
+  // Sprint 1 — both Done (21 pts completed)
+  { id: 10002, key: 'JYRA-2', summary: 'Migrate auth to JWT',         issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 13, status: 'Done',        sprint: JYRA_BURN_SPRINTS[0] },
+  { id: 10003, key: 'JYRA-3', summary: 'API versioning support',       issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  8, status: 'Done',        sprint: JYRA_BURN_SPRINTS[0] },
+  // Sprint 2 — JYRA-4 Done, JYRA-5 not (5 pts completed, 13 pts in progress)
+  { id: 10004, key: 'JYRA-4', summary: 'Database connection pooling',  issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  5, status: 'Done',        sprint: JYRA_BURN_SPRINTS[1] },
+  { id: 10005, key: 'JYRA-5', summary: 'Redis caching layer',          issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 13, status: 'In Progress', sprint: JYRA_BURN_SPRINTS[1] },
+  // Sprint 3 (active) — none done yet
+  { id: 10006, key: 'JYRA-6', summary: 'Background job queue',         issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  8, status: 'To Do',       sprint: JYRA_BURN_SPRINTS[2] },
+  { id: 10007, key: 'JYRA-7', summary: 'Audit logging service',        issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  5, status: 'To Do',       sprint: JYRA_BURN_SPRINTS[2] },
+  // Backlog — no sprint yet
+  { id: 10008, key: 'JYRA-8', summary: 'Deploy pipeline v2',           issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 21, status: 'To Do',       sprint: null },
+  { id: 10009, key: 'JYRA-9', summary: 'Performance benchmarks',       issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  3, status: 'To Do',       sprint: null },
 ]
-const ALL_JYRA = [JYRA_EPIC, ...JYRA_STORIES]  // 76 total story points across children
+const ALL_JYRA = [JYRA_EPIC, ...JYRA_STORIES]  // 76 total pts across stories
 
-// Format a JYRA issue into the shape /rest/api/3/search returns
+function statusCategory(s) {
+  if (s === 'Done')        return { key: 'done',          name: 'Done' }
+  if (s === 'In Progress') return { key: 'indeterminate', name: 'In Progress' }
+  return                          { key: 'new',           name: 'To Do' }
+}
+
+// Format a JYRA issue for /rest/api/3/search or /rest/api/3/search/jql
 // Real Jira: search returns id as string, picker returns id as int
 function jiraSearchIssue(issue) {
   return {
@@ -219,6 +240,8 @@ function jiraSearchIssue(issue) {
       issuetype: { name: issue.issueType },
       parent: issue.parentKey ? { key: issue.parentKey } : undefined,
       story_points: issue.storyPoints,
+      status: { name: issue.status, statusCategory: statusCategory(issue.status) },
+      customfield_10020: issue.sprint ? [issue.sprint] : null,
     },
   }
 }
@@ -241,11 +264,6 @@ function jqlFilter(jql) {
     return { issues: ALL_JYRA.filter(i => i.parentKey && parents.includes(i.parentKey)).map(jiraSearchIssue) }
   }
 
-  // "Epic Link" in (...) — Jira Cloud returns 400 for this
-  if (j.includes('epic link')) {
-    return { statusCode: 400, body: { errorMessages: ['"Epic Link" is not supported in Jira Cloud'] } }
-  }
-
   return { issues: [] }
 }
 
@@ -264,9 +282,10 @@ const VELOCITY_BY_BOARD = { 101: LW_VELOCITY, 102: VK_VELOCITY, 103: ZG_VELOCITY
 const ISSUES_BY_BOARD   = { 101: LW_ACTIVE_ISSUES, 102: VK_ACTIVE_ISSUES, 103: ZG_ACTIVE_ISSUES, 104: SR_ACTIVE_ISSUES, 201: ND_ACTIVE_ISSUES }
 
 const FIELDS = [
-  { id: 'story_points', name: 'Story Points', custom: true,  schema: { type: 'number' } },
-  { id: 'summary',      name: 'Summary',      custom: false, schema: { type: 'string' } },
-  { id: 'status',       name: 'Status',       custom: false, schema: { type: 'status' } },
+  { id: 'story_points',       name: 'Story Points', custom: true,  schema: { type: 'number' } },
+  { id: 'summary',            name: 'Summary',      custom: false, schema: { type: 'string' } },
+  { id: 'status',             name: 'Status',       custom: false, schema: { type: 'status' } },
+  { id: 'customfield_10020',  name: 'Sprint',       custom: true,  schema: { type: 'array', items: 'json' } },
 ]
 
 // ── HTTP server ───────────────────────────────────────────────────────────────
@@ -353,15 +372,27 @@ const server = http.createServer((req, res) => {
     })
   }
 
-  // /rest/api/3/search — used by Project Burn Rate scope resolution
-  if (path === '/rest/api/3/search') {
+  // /rest/api/3/search — legacy GET endpoint (kept for other callers)
+  if (path === '/rest/api/3/search' && req.method !== 'POST') {
     const jql = q.jql || ''
     const result = jqlFilter(jql)
     if (result.statusCode) {
       return send(result.body, result.statusCode)
     }
-    const issues = result.issues
-    return send({ issues, total: issues.length, startAt: 0, maxResults: 100 })
+    return send({ issues: result.issues, total: result.issues.length, startAt: 0, maxResults: 100 })
+  }
+
+  // /rest/api/3/search/jql — new POST JQL endpoint (Jira Cloud v3)
+  if (path === '/rest/api/3/search/jql' && req.method === 'POST') {
+    let data = ''
+    req.on('data', chunk => { data += chunk })
+    req.on('end', () => {
+      const body = data ? (() => { try { return JSON.parse(data) } catch { return {} } })() : {}
+      const result = jqlFilter(body.jql || '')
+      if (result.statusCode) return send(result.body, result.statusCode)
+      send({ issues: result.issues, total: result.issues.length, startAt: 0, maxResults: 100 })
+    })
+    return  // async — res handled in req.on('end')
   }
 
   notFound()
