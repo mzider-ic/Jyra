@@ -21,7 +21,15 @@ struct ProjectBurnRateWidgetView: View {
                 ContentUnavailableView("No scope selected", systemImage: "list.bullet.rectangle")
             } else if let result {
                 if result.points.isEmpty {
-                    ContentUnavailableView("No sprint assignments", systemImage: "calendar.badge.exclamationmark")
+                    if result.issueCount == 0 {
+                        ContentUnavailableView("No child issues found", systemImage: "doc.text.magnifyingglass")
+                    } else {
+                        ContentUnavailableView(
+                            "No sprint assignments",
+                            systemImage: "calendar.badge.exclamationmark",
+                            description: Text("\(result.issueCount) issue\(result.issueCount == 1 ? "" : "s") found, but none are assigned to a sprint")
+                        )
+                    }
                 } else {
                     chartView(result)
                 }

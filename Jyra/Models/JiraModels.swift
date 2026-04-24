@@ -161,6 +161,7 @@ struct BurnUpResult {
     let points: [BurnUpPoint]
     let totalScope: Double
     let completedPoints: Double
+    let issueCount: Int
 }
 
 struct JiraIssue: Identifiable, Hashable {

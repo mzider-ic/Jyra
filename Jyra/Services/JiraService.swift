@@ -308,7 +308,7 @@ actor JiraService {
 
     func fetchBurnUp(config: ProjectBurnRateConfig) async throws -> BurnUpResult {
         guard !config.parentIssues.isEmpty else {
-            return BurnUpResult(points: [], totalScope: 0, completedPoints: 0)
+            return BurnUpResult(points: [], totalScope: 0, completedPoints: 0, issueCount: 0)
         }
         let sprintField = try await fetchSprintField()
         let issues = try await fetchChildIssues(
@@ -412,18 +412,30 @@ actor JiraService {
         guard !keys.isEmpty else { return [] }
 
         let quoted = keys.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ", ")
-        // Classic (company-managed) projects use "Epic Link"; next-gen (team-managed) use parent.
-        // Using OR covers both without needing to know the project type up front.
-        let jql = "(parent in (\(quoted)) OR \"Epic Link\" in (\(quoted))) ORDER BY created ASC"
-        let fields = ["summary", "status", "issuetype", pointsField, sprintField]
 
+        // Next-gen (team-managed) projects: stories use parent field
+        let byParent = try await runChildIssueSearch(
+            jql: "parent in (\(quoted)) ORDER BY created ASC",
+            pointsField: pointsField, sprintField: sprintField
+        )
+        if !byParent.isEmpty { return byParent }
+
+        // Classic (company-managed) projects: stories use Epic Link custom field
+        return (try? await runChildIssueSearch(
+            jql: "\"Epic Link\" in (\(quoted)) ORDER BY created ASC",
+            pointsField: pointsField, sprintField: sprintField
+        )) ?? []
+    }
+
+    private func runChildIssueSearch(jql: String, pointsField: String, sprintField: String) async throws -> [IssueForBurnUp] {
+        let fieldsCsv = ["summary", "status", "issuetype", pointsField, sprintField].joined(separator: ",")
         var all: [IssueForBurnUp] = []
         var startAt = 0
 
         repeat {
             let payload = try await getJSON("/rest/api/3/search/jql", query: [
                 "jql": jql,
-                "fields": fields.joined(separator: ","),
+                "fields": fieldsCsv,
                 "maxResults": "100",
                 "startAt": "\(startAt)"
             ])
@@ -495,7 +507,7 @@ actor JiraService {
             ))
         }
 
-        return BurnUpResult(points: points, totalScope: totalScope, completedPoints: completedPoints)
+        return BurnUpResult(points: points, totalScope: totalScope, completedPoints: completedPoints, issueCount: issues.count)
     }
 
     private func fetchPreferredPointsField() async throws -> JiraField? {
