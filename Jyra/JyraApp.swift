@@ -3,11 +3,13 @@ import SwiftUI
 @main
 struct JyraApp: App {
     @State private var configService = ConfigService()
+    @State private var metricsStore = MetricsStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(configService)
+                .environment(metricsStore)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 800)

@@ -27,6 +27,7 @@
 		C0EDC127A39C7A3A6EB55E1A /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917BB02780EAD3B4A025ABE0 /* AppConfig.swift */; };
 		E257E483271B221720EF42D3 /* BurndownWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2810B3FAF1BDAC895C12E54 /* BurndownWidgetView.swift */; };
 		F04E7DCA1F30D1C07F65ECF1 /* WidgetContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088750E7FF213B7C30F97C9D /* WidgetContainerView.swift */; };
+		BBCD1234567890ABCDEF5678 /* MetricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABC1234567890ABCDEF1234 /* MetricsStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -53,6 +54,7 @@
 		DF726889D7D43F61D5A72426 /* Charts.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Charts.framework; path = System/Library/Frameworks/Charts.framework; sourceTree = SDKROOT; };
 		DFB1988ADB3E33AE02669E31 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		EB389994BE1EAAA054D33843 /* ProjectBurnRateWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectBurnRateWidgetView.swift; sourceTree = "<group>"; };
+		AABC1234567890ABCDEF1234 /* MetricsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,6 +109,7 @@
 				A7A486C11E57C99E68EBFC63 /* ConfigService.swift */,
 				7FC90C470D99D483E7FFC310 /* DashboardService.swift */,
 				10250A20A651EEF24A547028 /* JiraService.swift */,
+				AABC1234567890ABCDEF1234 /* MetricsStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -249,6 +252,7 @@
 				90F92D70CAEF7B4F601A800A /* JiraModels.swift in Sources */,
 				64244527F131FE5C2414553E /* JiraService.swift in Sources */,
 				83B3292E056AD537AFF4BEB4 /* JyraApp.swift in Sources */,
+				BBCD1234567890ABCDEF5678 /* MetricsStore.swift in Sources */,
 				0C11241A3118FC810BD343C9 /* ProjectBurnRateWidgetView.swift in Sources */,
 				9B3A4ED06BCDBDAD084F314F /* SettingsView.swift in Sources */,
 				392C5ED91B8F0F8068FCA9A8 /* SetupView.swift in Sources */,

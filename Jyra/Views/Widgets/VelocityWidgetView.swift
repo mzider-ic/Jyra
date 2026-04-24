@@ -5,7 +5,9 @@ import Charts
 
 struct VelocityWidgetView: View {
     let config: VelocityConfig
+    let widgetId: String
     @Environment(ConfigService.self) private var configService
+    @Environment(MetricsStore.self) private var metricsStore
 
     @State private var entries: [VelocityEntry] = []
     @State private var isLoading = false
@@ -36,6 +38,7 @@ struct VelocityWidgetView: View {
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, minHeight: 340, alignment: .top)
         .task { await load() }
+        .onDisappear { metricsStore.clear(widgetId: widgetId) }
         .onTapGesture { if !entries.isEmpty { showExpanded = true } }
         .sheet(isPresented: $showExpanded) {
             VStack(alignment: .leading, spacing: 12) {
@@ -86,6 +89,23 @@ struct VelocityWidgetView: View {
 
     // MARK: - Load
 
+    private func publishMetrics() {
+        let eligible = entries.filter { !$0.isActive && $0.committed > 0 }
+        let avgVelocity: Double = eligible.isEmpty ? 0 : eligible.map(\.completed).reduce(0, +) / Double(eligible.count)
+        let avgCompletion: Double = eligible.isEmpty ? 0 : eligible.map { e in
+            min(100, max(0, (e.completed / e.committed) * 100))
+        }.reduce(0, +) / Double(eligible.count)
+        metricsStore.publish(
+            widgetId: widgetId,
+            title: config.displayTitle,
+            type: .velocity,
+            metrics: [
+                WidgetMetric(id: "avg_velocity", name: "Avg Velocity", value: "\(Int(avgVelocity.rounded())) pts", icon: "chart.bar.fill"),
+                WidgetMetric(id: "avg_completion", name: "Avg Completion", value: "\(Int(avgCompletion.rounded()))%", icon: "percent"),
+            ]
+        )
+    }
+
     private func load() async {
         guard let cfg = configService.config else { return }
         isLoading = true
@@ -93,6 +113,7 @@ struct VelocityWidgetView: View {
         defer { isLoading = false }
         do {
             entries = try await JiraService(config: cfg).fetchVelocityEntries(boardId: config.boardId)
+            publishMetrics()
         } catch {
             self.error = error.localizedDescription
         }

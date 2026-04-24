@@ -3,7 +3,9 @@ import Charts
 
 struct BurndownWidgetView: View {
     let config: BurndownConfig
+    let widgetId: String
     @Environment(ConfigService.self) private var configService
+    @Environment(MetricsStore.self) private var metricsStore
 
     @State private var result: BurndownResult? = nil
     @State private var isLoading = false
@@ -26,6 +28,7 @@ struct BurndownWidgetView: View {
         .task(id: "\(config.boardId)-\(config.sprintId.displayValue)") {
             await load()
         }
+        .onDisappear { metricsStore.clear(widgetId: widgetId) }
     }
 
     private func errorView(_ msg: String) -> some View {
@@ -140,13 +143,29 @@ struct BurndownWidgetView: View {
         }
     }
 
+    private func publishMetrics(result: BurndownResult) {
+        let pct = result.initialPoints > 0 ? Int((result.completedPoints / result.initialPoints) * 100) : 0
+        var metrics = [
+            WidgetMetric(id: "remaining", name: "Remaining", value: "\(Int(result.remainingPoints)) pts", icon: "chart.line.downtrend.xyaxis"),
+            WidgetMetric(id: "pct_complete", name: "% Complete", value: "\(pct)%", icon: "percent"),
+        ]
+        if let proj = result.projectedEndDate {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            metrics.append(WidgetMetric(id: "projected_end", name: "Projected End", value: formatter.string(from: proj), icon: "calendar"))
+        }
+        metricsStore.publish(widgetId: widgetId, title: result.sprintName, type: .burndown, metrics: metrics)
+    }
+
     private func load() async {
         guard let cfg = configService.config else { return }
         isLoading = true
         error = nil
         defer { isLoading = false }
         do {
-            result = try await JiraService(config: cfg).fetchBurndown(config: config)
+            let r = try await JiraService(config: cfg).fetchBurndown(config: config)
+            result = r
+            publishMetrics(result: r)
         } catch {
             self.error = error.localizedDescription
         }

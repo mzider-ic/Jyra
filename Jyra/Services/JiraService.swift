@@ -419,11 +419,11 @@ actor JiraService {
         var startAt = 0
 
         repeat {
-            let payload = try await postJSON("/rest/api/3/search/jql", body: [
+            let payload = try await getJSON("/rest/api/3/search/jql", query: [
                 "jql": jql,
-                "fields": fields,
-                "maxResults": 100,
-                "startAt": startAt
+                "fields": fields.joined(separator: ","),
+                "maxResults": "100",
+                "startAt": "\(startAt)"
             ])
 
             guard let issuesRaw = payload["issues"] as? [[String: Any]] else { break }
@@ -542,14 +542,15 @@ actor JiraService {
         return try JSONDecoder.jira.decode(T.self, from: data)
     }
 
-    private func postJSON(_ path: String, body: [String: Any]) async throws -> [String: Any] {
-        guard let url = config.baseURL.appendingPathComponent(path) as URL? else { throw JiraError.invalidURL }
+    private func getJSON(_ path: String, query: [String: String] = [:]) async throws -> [String: Any] {
+        var components = URLComponents(url: config.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty {
+            components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+        guard let url = components.url else { throw JiraError.invalidURL }
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
         request.setValue(config.authHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw JiraError.invalidResponse }

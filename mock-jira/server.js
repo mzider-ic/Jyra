@@ -382,17 +382,14 @@ const server = http.createServer((req, res) => {
     return send({ issues: result.issues, total: result.issues.length, startAt: 0, maxResults: 100 })
   }
 
-  // /rest/api/3/search/jql — new POST JQL endpoint (Jira Cloud v3)
-  if (path === '/rest/api/3/search/jql' && req.method === 'POST') {
-    let data = ''
-    req.on('data', chunk => { data += chunk })
-    req.on('end', () => {
-      const body = data ? (() => { try { return JSON.parse(data) } catch { return {} } })() : {}
-      const result = jqlFilter(body.jql || '')
-      if (result.statusCode) return send(result.body, result.statusCode)
-      send({ issues: result.issues, total: result.issues.length, startAt: 0, maxResults: 100 })
-    })
-    return  // async — res handled in req.on('end')
+  // /rest/api/3/search/jql — GET with query params (Jira Cloud v3)
+  if (path === '/rest/api/3/search/jql' && req.method === 'GET') {
+    const jql = q.jql || ''
+    const result = jqlFilter(jql)
+    if (result.statusCode) {
+      return send(result.body, result.statusCode)
+    }
+    return send({ issues: result.issues, total: result.issues.length, startAt: 0, maxResults: 100 })
   }
 
   notFound()

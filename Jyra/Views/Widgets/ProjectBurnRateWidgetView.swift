@@ -3,7 +3,9 @@ import Charts
 
 struct ProjectBurnRateWidgetView: View {
     let config: ProjectBurnRateConfig
+    let widgetId: String
     @Environment(ConfigService.self) private var configService
+    @Environment(MetricsStore.self) private var metricsStore
 
     @State private var result: BurnUpResult? = nil
     @State private var isLoading = false
@@ -29,6 +31,7 @@ struct ProjectBurnRateWidgetView: View {
         }
         .padding(16)
         .task(id: taskKey) { await load() }
+        .onDisappear { metricsStore.clear(widgetId: widgetId) }
     }
 
     // MARK: - Views
@@ -153,13 +156,28 @@ struct ProjectBurnRateWidgetView: View {
         config.parentIssues.map(\.key).joined(separator: ",") + "|" + config.pointsField
     }
 
+    private func publishMetrics(result: BurnUpResult) {
+        let pct = result.totalScope > 0 ? Int(result.completedPoints / result.totalScope * 100) : 0
+        metricsStore.publish(
+            widgetId: widgetId,
+            title: config.projectName,
+            type: .projectBurnRate,
+            metrics: [
+                WidgetMetric(id: "total_scope", name: "Total Scope", value: "\(Int(result.totalScope)) pts", icon: "chart.xyaxis.line"),
+                WidgetMetric(id: "pct_complete", name: "% Complete", value: "\(pct)%", icon: "percent"),
+            ]
+        )
+    }
+
     private func load() async {
         guard let cfg = configService.config, !config.parentIssues.isEmpty else { return }
         isLoading = true
         error = nil
         defer { isLoading = false }
         do {
-            result = try await JiraService(config: cfg).fetchBurnUp(config: config)
+            let r = try await JiraService(config: cfg).fetchBurnUp(config: config)
+            result = r
+            publishMetrics(result: r)
         } catch {
             self.error = error.localizedDescription
         }
