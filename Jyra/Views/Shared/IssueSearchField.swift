@@ -146,7 +146,7 @@ struct IssueSearchField: View {
                 Text(label).font(.system(size: 10))
                 Image(systemName: "chevron.down").font(.system(size: 8))
             }
-            .foregroundStyle(hasField ? .secondary : .orange)
+            .foregroundStyle(hasField ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
         }
         .menuStyle(.borderlessButton)
         .fixedSize()

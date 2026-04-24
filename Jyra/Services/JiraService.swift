@@ -457,7 +457,7 @@ actor JiraService {
                 let statusKey = ((f?["status"] as? [String: Any])?["statusCategory"] as? [String: Any])?["key"] as? String
                 let sprintValue = f?[sprintField] ?? f?["customfield_10020"]
                 // Try each configured field in order; take the first non-nil value
-                let storyPoints = pointsFields.lazy.compactMap { parsePointValue(f?[$0]) }.first
+                let storyPoints = pointsFields.lazy.compactMap { self.parsePointValue(f?[$0]) }.first
                 all.append(IssueForBurnUp(
                     id: json["id"] as? String ?? UUID().uuidString,
                     key: json["key"] as? String ?? "",
