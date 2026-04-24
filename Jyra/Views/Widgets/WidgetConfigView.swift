@@ -182,29 +182,17 @@ struct WidgetConfigView: View {
             .textFieldStyle(.roundedBorder)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Story Points Field").font(.subheadline.bold())
-                FieldSearchField(
-                    selectedField: Binding(
-                        get: {
-                            guard let config = projectConfig, !config.pointsField.isEmpty else { return nil }
-                            return fields.first(where: { $0.id == config.pointsField }) ??
-                                JiraField(id: config.pointsField, name: config.pointsFieldName, custom: true, schema: nil)
-                        },
-                        set: { field in
-                            projectConfig?.pointsField = field?.id ?? ""
-                            projectConfig?.pointsFieldName = field?.name ?? ""
-                        }
+                Text("Epics / Scope").font(.subheadline.bold())
+                Text("Select a points field for each epic to pull in story point estimates.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                IssueSearchField(
+                    selectedIssues: Binding(
+                        get: { projectConfig?.parentIssues ?? [] },
+                        set: { projectConfig?.parentIssues = $0 }
                     ),
                     fields: fields
                 )
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Epics / Scope").font(.subheadline.bold())
-                IssueSearchField(selectedIssues: Binding(
-                    get: { projectConfig?.parentIssues ?? [] },
-                    set: { projectConfig?.parentIssues = $0 }
-                ))
             }
         }
     }

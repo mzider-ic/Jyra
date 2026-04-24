@@ -311,9 +311,17 @@ actor JiraService {
             return BurnUpResult(points: [], totalScope: 0, completedPoints: 0, issueCount: 0, backlogCount: 0, backlogPoints: 0)
         }
         let sprintField = try await fetchSprintField()
+
+        // Collect all unique non-empty per-epic fields; fall back to global, then "story_points"
+        var allFields = config.parentIssues.map(\.pointsField).filter { !$0.isEmpty }
+        if !config.pointsField.isEmpty, !allFields.contains(config.pointsField) {
+            allFields.append(config.pointsField)
+        }
+        if allFields.isEmpty { allFields = ["story_points"] }
+
         let issues = try await fetchChildIssues(
             parentKeys: config.parentIssues.map(\.key),
-            pointsField: config.pointsField,
+            pointsFields: Array(Set(allFields)),
             sprintField: sprintField
         )
         return buildBurnUp(issues: issues)
@@ -407,7 +415,7 @@ actor JiraService {
             ?? "customfield_10020"
     }
 
-    private func fetchChildIssues(parentKeys: [String], pointsField: String, sprintField: String) async throws -> [IssueForBurnUp] {
+    private func fetchChildIssues(parentKeys: [String], pointsFields: [String], sprintField: String) async throws -> [IssueForBurnUp] {
         let keys = Array(Set(parentKeys.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted()
         guard !keys.isEmpty else { return [] }
 
@@ -416,20 +424,19 @@ actor JiraService {
         // Next-gen (team-managed) projects: stories use parent field
         let byParent = try await runChildIssueSearch(
             jql: "parent in (\(quoted)) ORDER BY created ASC",
-            pointsField: pointsField, sprintField: sprintField
+            pointsFields: pointsFields, sprintField: sprintField
         )
         if !byParent.isEmpty { return byParent }
 
         // Classic (company-managed) projects: stories use Epic Link custom field
         return (try? await runChildIssueSearch(
             jql: "\"Epic Link\" in (\(quoted)) ORDER BY created ASC",
-            pointsField: pointsField, sprintField: sprintField
+            pointsFields: pointsFields, sprintField: sprintField
         )) ?? []
     }
 
-    private func runChildIssueSearch(jql: String, pointsField: String, sprintField: String) async throws -> [IssueForBurnUp] {
-        // Always request customfield_10020 alongside the discovered sprint field in case they differ
-        let requestedFields = Array(Set(["summary", "status", "issuetype", pointsField, sprintField, "customfield_10020"]))
+    private func runChildIssueSearch(jql: String, pointsFields: [String], sprintField: String) async throws -> [IssueForBurnUp] {
+        let requestedFields = Array(Set(["summary", "status", "issuetype"] + pointsFields + [sprintField, "customfield_10020"]))
         let fieldsCsv = requestedFields.joined(separator: ",")
         var all: [IssueForBurnUp] = []
         var startAt = 0
@@ -448,13 +455,14 @@ actor JiraService {
             for json in issuesRaw {
                 let f = json["fields"] as? [String: Any]
                 let statusKey = ((f?["status"] as? [String: Any])?["statusCategory"] as? [String: Any])?["key"] as? String
-                // Try discovered sprint field first, then fall back to customfield_10020
                 let sprintValue = f?[sprintField] ?? f?["customfield_10020"]
+                // Try each configured field in order; take the first non-nil value
+                let storyPoints = pointsFields.lazy.compactMap { parsePointValue(f?[$0]) }.first
                 all.append(IssueForBurnUp(
                     id: json["id"] as? String ?? UUID().uuidString,
                     key: json["key"] as? String ?? "",
                     summary: f?["summary"] as? String ?? "",
-                    storyPoints: parsePointValue(f?[pointsField]),
+                    storyPoints: storyPoints,
                     isDone: statusKey == "done",
                     sprint: parseSprintInfo(sprintValue)
                 ))

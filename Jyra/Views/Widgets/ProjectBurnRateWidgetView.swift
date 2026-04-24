@@ -180,14 +180,14 @@ struct ProjectBurnRateWidgetView: View {
     }
 
     private func publishMetrics(result: BurnUpResult) {
-        let pct = result.totalScope > 0 ? Int(result.completedPoints / result.totalScope * 100) : 0
+        let pct = result.totalScope > 0 ? (result.completedPoints / result.totalScope) * 100 : 0
         metricsStore.publish(
             widgetId: widgetId,
             title: config.projectName,
             type: .projectBurnRate,
             metrics: [
-                WidgetMetric(id: "total_scope", name: "Total Scope", value: "\(Int(result.totalScope)) pts", icon: "chart.xyaxis.line"),
-                WidgetMetric(id: "pct_complete", name: "% Complete", value: "\(pct)%", icon: "percent"),
+                WidgetMetric(id: "total_scope", name: "Total Scope", value: "\(Int(result.totalScope)) pts", icon: "chart.xyaxis.line", rawValue: result.totalScope),
+                WidgetMetric(id: "pct_complete", name: "% Complete", value: "\(Int(pct.rounded()))%", icon: "percent", rawValue: pct),
             ]
         )
     }

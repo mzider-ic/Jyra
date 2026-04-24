@@ -171,8 +171,8 @@ struct WidgetContainerView: View {
 
     @ViewBuilder
     private var metricsSection: some View {
-        let metricEntries = metricsStore.ordered(for: dashboard.widgets.map(\.id))
-        if !metricEntries.isEmpty {
+        let sections = metricsStore.aggregatedByType(for: dashboard.widgets.map(\.id))
+        if !sections.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { metricsExpanded.toggle() }
@@ -193,13 +193,12 @@ struct WidgetContainerView: View {
 
                 if metricsExpanded {
                     Divider()
-                    let cols = min(metricEntries.count, 3)
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: cols),
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: min(sections.count, 3)),
                         spacing: 12
                     ) {
-                        ForEach(metricEntries) { entry in
-                            MetricsCardView(entry: entry)
+                        ForEach(sections) { section in
+                            AggregatedMetricCardView(section: section)
                         }
                     }
                     .padding(16)
@@ -284,21 +283,29 @@ struct WidgetContainerView: View {
     }
 }
 
-// MARK: - Metrics Card
+// MARK: - Aggregated Metrics Card
 
-private struct MetricsCardView: View {
-    let entry: MetricsStore.Entry
+private struct AggregatedMetricCardView: View {
+    let section: AggregatedTypeSection
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(entry.title, systemImage: iconFor(entry.widgetType))
-                .font(.caption.bold())
-                .lineLimit(1)
-                .foregroundStyle(.secondary)
+            HStack {
+                Label(section.widgetType.displayName, systemImage: iconFor(section.widgetType))
+                    .font(.caption.bold())
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if section.widgetCount > 1 {
+                    Text("\(section.widgetCount) widgets")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+            }
 
             Divider()
 
-            ForEach(entry.metrics) { metric in
+            ForEach(section.metrics) { metric in
                 HStack {
                     Image(systemName: metric.icon)
                         .font(.system(size: 10))

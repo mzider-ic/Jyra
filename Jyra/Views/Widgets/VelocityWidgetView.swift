@@ -100,8 +100,8 @@ struct VelocityWidgetView: View {
             title: config.displayTitle,
             type: .velocity,
             metrics: [
-                WidgetMetric(id: "avg_velocity", name: "Avg Velocity", value: "\(Int(avgVelocity.rounded())) pts", icon: "chart.bar.fill"),
-                WidgetMetric(id: "avg_completion", name: "Avg Completion", value: "\(Int(avgCompletion.rounded()))%", icon: "percent"),
+                WidgetMetric(id: "avg_velocity", name: "Avg Velocity", value: "\(Int(avgVelocity.rounded())) pts", icon: "chart.bar.fill", rawValue: avgVelocity),
+                WidgetMetric(id: "avg_completion", name: "Avg Completion", value: "\(Int(avgCompletion.rounded()))%", icon: "percent", rawValue: avgCompletion),
             ]
         )
     }

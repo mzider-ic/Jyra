@@ -153,6 +153,24 @@ struct ProjectBurnRateConfig: Codable, Equatable {
         var id: String { key }
         var key: String
         var summary: String
+        var pointsField: String = ""
+        var pointsFieldName: String = ""
+
+        init(key: String, summary: String, pointsField: String = "", pointsFieldName: String = "") {
+            self.key = key; self.summary = summary
+            self.pointsField = pointsField; self.pointsFieldName = pointsFieldName
+        }
+
+        // Backward compat: old saved issues have no pointsField
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            key = try c.decode(String.self, forKey: .key)
+            summary = try c.decode(String.self, forKey: .summary)
+            pointsField = (try? c.decodeIfPresent(String.self, forKey: .pointsField)) ?? ""
+            pointsFieldName = (try? c.decodeIfPresent(String.self, forKey: .pointsFieldName)) ?? ""
+        }
+
+        private enum CodingKeys: String, CodingKey { case key, summary, pointsField, pointsFieldName }
     }
 
     // Legacy keys kept so old saved configs decode without error.

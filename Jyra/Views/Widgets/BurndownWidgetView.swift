@@ -144,10 +144,10 @@ struct BurndownWidgetView: View {
     }
 
     private func publishMetrics(result: BurndownResult) {
-        let pct = result.initialPoints > 0 ? Int((result.completedPoints / result.initialPoints) * 100) : 0
+        let pct = result.initialPoints > 0 ? (result.completedPoints / result.initialPoints) * 100 : 0
         var metrics = [
-            WidgetMetric(id: "remaining", name: "Remaining", value: "\(Int(result.remainingPoints)) pts", icon: "chart.line.downtrend.xyaxis"),
-            WidgetMetric(id: "pct_complete", name: "% Complete", value: "\(pct)%", icon: "percent"),
+            WidgetMetric(id: "remaining", name: "Remaining", value: "\(Int(result.remainingPoints)) pts", icon: "chart.line.downtrend.xyaxis", rawValue: result.remainingPoints),
+            WidgetMetric(id: "pct_complete", name: "% Complete", value: "\(Int(pct.rounded()))%", icon: "percent", rawValue: pct),
         ]
         if let proj = result.projectedEndDate {
             let formatter = DateFormatter()
