@@ -412,7 +412,9 @@ actor JiraService {
         guard !keys.isEmpty else { return [] }
 
         let quoted = keys.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ", ")
-        let jql = "parent in (\(quoted)) ORDER BY created ASC"
+        // Classic (company-managed) projects use "Epic Link"; next-gen (team-managed) use parent.
+        // Using OR covers both without needing to know the project type up front.
+        let jql = "(parent in (\(quoted)) OR \"Epic Link\" in (\(quoted))) ORDER BY created ASC"
         let fields = ["summary", "status", "issuetype", pointsField, sprintField]
 
         var all: [IssueForBurnUp] = []
