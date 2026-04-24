@@ -162,6 +162,8 @@ struct BurnUpResult {
     let totalScope: Double
     let completedPoints: Double
     let issueCount: Int
+    let backlogCount: Int     // issues with no sprint assignment
+    let backlogPoints: Double
 }
 
 struct JiraIssue: Identifiable, Hashable {

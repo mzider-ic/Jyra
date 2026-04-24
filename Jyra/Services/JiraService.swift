@@ -308,7 +308,7 @@ actor JiraService {
 
     func fetchBurnUp(config: ProjectBurnRateConfig) async throws -> BurnUpResult {
         guard !config.parentIssues.isEmpty else {
-            return BurnUpResult(points: [], totalScope: 0, completedPoints: 0, issueCount: 0)
+            return BurnUpResult(points: [], totalScope: 0, completedPoints: 0, issueCount: 0, backlogCount: 0, backlogPoints: 0)
         }
         let sprintField = try await fetchSprintField()
         let issues = try await fetchChildIssues(
@@ -428,7 +428,9 @@ actor JiraService {
     }
 
     private func runChildIssueSearch(jql: String, pointsField: String, sprintField: String) async throws -> [IssueForBurnUp] {
-        let fieldsCsv = ["summary", "status", "issuetype", pointsField, sprintField].joined(separator: ",")
+        // Always request customfield_10020 alongside the discovered sprint field in case they differ
+        let requestedFields = Array(Set(["summary", "status", "issuetype", pointsField, sprintField, "customfield_10020"]))
+        let fieldsCsv = requestedFields.joined(separator: ",")
         var all: [IssueForBurnUp] = []
         var startAt = 0
 
@@ -446,13 +448,15 @@ actor JiraService {
             for json in issuesRaw {
                 let f = json["fields"] as? [String: Any]
                 let statusKey = ((f?["status"] as? [String: Any])?["statusCategory"] as? [String: Any])?["key"] as? String
+                // Try discovered sprint field first, then fall back to customfield_10020
+                let sprintValue = f?[sprintField] ?? f?["customfield_10020"]
                 all.append(IssueForBurnUp(
                     id: json["id"] as? String ?? UUID().uuidString,
                     key: json["key"] as? String ?? "",
                     summary: f?["summary"] as? String ?? "",
                     storyPoints: parsePointValue(f?[pointsField]),
                     isDone: statusKey == "done",
-                    sprint: parseSprintInfo(f?[sprintField])
+                    sprint: parseSprintInfo(sprintValue)
                 ))
             }
 
@@ -464,23 +468,52 @@ actor JiraService {
     }
 
     private func parseSprintInfo(_ value: Any?) -> SprintInfo? {
-        let dict: [String: Any]?
-        if let arr = value as? [[String: Any]] { dict = arr.last }
-        else if let single = value as? [String: Any] { dict = single }
+        if let arr = value as? [[String: Any]] { return arr.last.flatMap(sprintFromDict) }
+        if let single = value as? [String: Any] { return sprintFromDict(single) }
+        // Greenhopper serialized string: "com.atlassian.greenhopper...Sprint@abc[id=1,name=Sprint 1,...]"
+        if let str = value as? String, str.contains("[") { return sprintFromGreenhopperString(str) }
+        return nil
+    }
+
+    private func sprintFromDict(_ d: [String: Any]) -> SprintInfo? {
+        // JSONSerialization may give id as Int or as Double (e.g. 123.0)
+        let id: Int
+        if let v = d["id"] as? Int { id = v }
+        else if let v = d["id"] as? Double { id = Int(v) }
         else { return nil }
-        guard let d = dict, let id = d["id"] as? Int else { return nil }
         return SprintInfo(
             id: id,
             name: d["name"] as? String ?? "",
-            state: d["state"] as? String ?? "",
+            state: (d["state"] as? String ?? "").lowercased(),
             startDate: parseJiraDate(d["startDate"] as? String),
             endDate: parseJiraDate(d["endDate"] as? String)
+        )
+    }
+
+    private func sprintFromGreenhopperString(_ str: String) -> SprintInfo? {
+        guard let open = str.firstIndex(of: "["), let close = str.lastIndex(of: "]") else { return nil }
+        let inner = String(str[str.index(after: open)..<close])
+        var kv: [String: String] = [:]
+        for pair in inner.split(separator: ",") {
+            let parts = pair.split(separator: "=", maxSplits: 1)
+            if parts.count == 2 { kv[String(parts[0])] = String(parts[1]) }
+        }
+        guard let idStr = kv["id"], let id = Int(idStr) else { return nil }
+        return SprintInfo(
+            id: id,
+            name: kv["name"] ?? "",
+            state: (kv["state"] ?? "").lowercased(),
+            startDate: parseJiraDate(kv["startDate"]),
+            endDate: parseJiraDate(kv["endDate"])
         )
     }
 
     private func buildBurnUp(issues: [IssueForBurnUp]) -> BurnUpResult {
         let totalScope = issues.reduce(0.0) { $0 + ($1.storyPoints ?? 0) }
         let completedPoints = issues.filter(\.isDone).reduce(0.0) { $0 + ($1.storyPoints ?? 0) }
+
+        let backlogIssues = issues.filter { $0.sprint == nil }
+        let backlogPoints = backlogIssues.reduce(0.0) { $0 + ($1.storyPoints ?? 0) }
 
         // Collect unique sprints ordered by start date
         var sprintMap: [Int: SprintInfo] = [:]
@@ -507,7 +540,25 @@ actor JiraService {
             ))
         }
 
-        return BurnUpResult(points: points, totalScope: totalScope, completedPoints: completedPoints, issueCount: issues.count)
+        // Append a backlog bucket if there are unsprinted stories
+        if !backlogIssues.isEmpty {
+            points.append(BurnUpPoint(
+                id: "backlog",
+                label: "Backlog (\(backlogIssues.count))",
+                sprintState: nil,
+                totalScope: totalScope,
+                cumulativeCompleted: cumCompleted
+            ))
+        }
+
+        return BurnUpResult(
+            points: points,
+            totalScope: totalScope,
+            completedPoints: completedPoints,
+            issueCount: issues.count,
+            backlogCount: backlogIssues.count,
+            backlogPoints: backlogPoints
+        )
     }
 
     private func fetchPreferredPointsField() async throws -> JiraField? {

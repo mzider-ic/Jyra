@@ -67,6 +67,11 @@ struct ProjectBurnRateWidgetView: View {
                 Text("\(Int(result.completedPoints)) / \(Int(result.totalScope)) \(config.pointsFieldName.lowercased()) complete")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
+                if result.backlogCount > 0 {
+                    Text("\(result.backlogCount) unsprinted · \(Int(result.backlogPoints)) pts")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.orange.opacity(0.8))
+                }
             }
             Spacer()
             let pct = result.totalScope > 0 ? Int(result.completedPoints / result.totalScope * 100) : 0
@@ -95,7 +100,7 @@ struct ProjectBurnRateWidgetView: View {
                     x: .value("Sprint", point.label),
                     y: .value("Completed", point.cumulativeCompleted)
                 )
-                .foregroundStyle(.green.opacity(point.sprintState == "future" ? 0.05 : 0.15))
+                .foregroundStyle(completedAreaColor(for: point.sprintState))
                 .interpolationMethod(.linear)
 
                 // Completed line
@@ -106,7 +111,7 @@ struct ProjectBurnRateWidgetView: View {
                 )
                 .foregroundStyle(completedColor(for: point.sprintState))
                 .lineStyle(StrokeStyle(lineWidth: 2,
-                                       dash: point.sprintState == "future" ? [4, 3] : []))
+                                       dash: (point.sprintState == "future" || point.sprintState == nil) ? [4, 3] : []))
                 .interpolationMethod(.linear)
 
                 // Dot for active sprint
@@ -136,6 +141,7 @@ struct ProjectBurnRateWidgetView: View {
             HStack(spacing: 12) {
                 legendSwatch(color: .secondary.opacity(0.6), dashed: true, label: "Scope")
                 legendSwatch(color: .green, dashed: false, label: "Completed")
+                legendSwatch(color: .secondary.opacity(0.5), dashed: true, label: "Backlog")
             }
             .font(.system(size: 9))
         }
@@ -150,11 +156,20 @@ struct ProjectBurnRateWidgetView: View {
         }
     }
 
+    private func completedAreaColor(for state: String?) -> Color {
+        switch state {
+        case nil:      return .secondary.opacity(0.06)  // backlog bucket
+        case "future": return .green.opacity(0.05)
+        default:       return .green.opacity(0.15)
+        }
+    }
+
     private func completedColor(for state: String?) -> Color {
         switch state {
         case "closed": return .green
         case "active": return .green.opacity(0.7)
-        default:       return .green.opacity(0.4)
+        case "future": return .green.opacity(0.4)
+        default:       return .secondary.opacity(0.5)   // nil = backlog bucket
         }
     }
 
