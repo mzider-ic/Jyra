@@ -184,6 +184,23 @@ struct JiraIssuePickerResponse: Decodable {
         let key: String
         let summary: String
         let subtitle: String?  // issue type (e.g. "Epic", "Story") returned by Jira picker
+
+        // Real Jira Cloud returns id as Int; mock returns String.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            if let intId = try? c.decode(Int.self, forKey: .id) {
+                id = String(intId)
+            } else {
+                id = try c.decode(String.self, forKey: .id)
+            }
+            key = try c.decode(String.self, forKey: .key)
+            summary = try c.decode(String.self, forKey: .summary)
+            subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, key, summary, subtitle
+        }
     }
 }
 

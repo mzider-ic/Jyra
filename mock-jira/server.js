@@ -193,25 +193,26 @@ const ND_ACTIVE_ISSUES = makeIssues('ND', 5004, [
 // Use these to test the Project Burn Rate widget.
 // Add JYRA-1 as scope, child stories (JYRA-2…JYRA-9) supply the point total.
 const JYRA_EPIC = {
-  id: 'jyra-1', key: 'JYRA-1', summary: 'Platform Modernization',
+  id: 10001, key: 'JYRA-1', summary: 'Platform Modernization',
   issueType: 'Epic', parentKey: null, storyPoints: null,
 }
 const JYRA_STORIES = [
-  { id: 'jyra-2', key: 'JYRA-2', summary: 'Migrate auth to JWT',          issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 13 },
-  { id: 'jyra-3', key: 'JYRA-3', summary: 'API versioning support',        issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  8 },
-  { id: 'jyra-4', key: 'JYRA-4', summary: 'Database connection pooling',   issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  5 },
-  { id: 'jyra-5', key: 'JYRA-5', summary: 'Redis caching layer',           issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 13 },
-  { id: 'jyra-6', key: 'JYRA-6', summary: 'Background job queue',          issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  8 },
-  { id: 'jyra-7', key: 'JYRA-7', summary: 'Audit logging service',         issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  5 },
-  { id: 'jyra-8', key: 'JYRA-8', summary: 'Deploy pipeline v2',            issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 21 },
-  { id: 'jyra-9', key: 'JYRA-9', summary: 'Performance benchmarks',        issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  3 },
+  { id: 10002, key: 'JYRA-2', summary: 'Migrate auth to JWT',          issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 13 },
+  { id: 10003, key: 'JYRA-3', summary: 'API versioning support',        issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  8 },
+  { id: 10004, key: 'JYRA-4', summary: 'Database connection pooling',   issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  5 },
+  { id: 10005, key: 'JYRA-5', summary: 'Redis caching layer',           issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 13 },
+  { id: 10006, key: 'JYRA-6', summary: 'Background job queue',          issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  8 },
+  { id: 10007, key: 'JYRA-7', summary: 'Audit logging service',         issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  5 },
+  { id: 10008, key: 'JYRA-8', summary: 'Deploy pipeline v2',            issueType: 'Story', parentKey: 'JYRA-1', storyPoints: 21 },
+  { id: 10009, key: 'JYRA-9', summary: 'Performance benchmarks',        issueType: 'Story', parentKey: 'JYRA-1', storyPoints:  3 },
 ]
 const ALL_JYRA = [JYRA_EPIC, ...JYRA_STORIES]  // 76 total story points across children
 
 // Format a JYRA issue into the shape /rest/api/3/search returns
+// Real Jira: search returns id as string, picker returns id as int
 function jiraSearchIssue(issue) {
   return {
-    id: issue.id,
+    id: String(issue.id),
     key: issue.key,
     fields: {
       summary: issue.summary,
