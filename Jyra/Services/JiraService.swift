@@ -232,8 +232,6 @@ actor JiraService {
     ) -> BurndownResult {
         let cal = Calendar.current
         let now = Date()
-        let fmt = ISO8601DateFormatter()
-
         let totalPoints = issues.reduce(0.0) { $0 + ($1.fields.storyPoints ?? 0) }
 
         var days: [Date] = []
@@ -248,7 +246,7 @@ actor JiraService {
         for issue in issues {
             guard issue.fields.status.statusCategory.key == "done",
                   let resStr = issue.fields.resolutiondate,
-                  let resDate = fmt.date(from: resStr) else { continue }
+                  let resDate = parseJiraDate(resStr) else { continue }
             let day = cal.startOfDay(for: resDate)
             completedByDay[day, default: 0] += issue.fields.storyPoints ?? 0
         }
@@ -726,10 +724,8 @@ actor JiraService {
 
         for i in issues.indices {
             if var fields = issues[i]["fields"] as? [String: Any] {
-                if let pts = fields[pointsField] as? Double {
+                if let pts = parsePointValue(fields[pointsField]) {
                     fields["storyPoints_decoded"] = pts
-                } else if let pts = fields[pointsField] as? Int {
-                    fields["storyPoints_decoded"] = Double(pts)
                 }
                 issues[i]["fields"] = fields
             }
@@ -747,10 +743,8 @@ actor JiraService {
             if let issueJson = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["issues"] as? [[String: Any]],
                i < issueJson.count,
                let fields = issueJson[i]["fields"] as? [String: Any] {
-                if let pts = fields[pointsField] as? Double {
+                if let pts = parsePointValue(fields[pointsField]) {
                     result.issues[i].fields.storyPoints = pts
-                } else if let pts = fields[pointsField] as? Int {
-                    result.issues[i].fields.storyPoints = Double(pts)
                 }
             }
         }

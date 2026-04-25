@@ -110,10 +110,12 @@ struct BurndownWidgetView: View {
             stat("Total", value: result.initialPoints)
             stat("Done", value: result.completedPoints)
             stat("Left", value: result.remainingPoints)
-            if let proj = result.projectedEndDate {
-                Text("Finish: \(proj, style: .date)")
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Sprint").font(.system(size: 9)).foregroundStyle(.secondary)
+                Text("\(result.startDate, style: .date) – \(result.endDate, style: .date)")
                     .font(.system(size: 10))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -145,15 +147,14 @@ struct BurndownWidgetView: View {
 
     private func publishMetrics(result: BurndownResult) {
         let pct = result.initialPoints > 0 ? (result.completedPoints / result.initialPoints) * 100 : 0
-        var metrics = [
+        let fmt = DateFormatter()
+        fmt.dateStyle = .short
+        let sprintRange = "\(fmt.string(from: result.startDate)) – \(fmt.string(from: result.endDate))"
+        let metrics = [
             WidgetMetric(id: "remaining", name: "Remaining", value: "\(Int(result.remainingPoints)) pts", icon: "chart.line.downtrend.xyaxis", rawValue: result.remainingPoints),
             WidgetMetric(id: "pct_complete", name: "% Complete", value: "\(Int(pct.rounded()))%", icon: "percent", rawValue: pct),
+            WidgetMetric(id: "sprint_dates", name: "Sprint", value: sprintRange, icon: "calendar"),
         ]
-        if let proj = result.projectedEndDate {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .short
-            metrics.append(WidgetMetric(id: "projected_end", name: "Projected End", value: formatter.string(from: proj), icon: "calendar"))
-        }
         metricsStore.publish(widgetId: widgetId, title: result.sprintName, type: .burndown, metrics: metrics)
     }
 
