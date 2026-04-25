@@ -6,6 +6,7 @@ struct ProjectBurnRateWidgetView: View {
     let widgetId: String
     @Environment(ConfigService.self) private var configService
     @Environment(MetricsStore.self) private var metricsStore
+    @Environment(JiraDataCache.self) private var dataCache
 
     @State private var result: BurnUpResult? = nil
     @State private var isLoading = false
@@ -38,8 +39,7 @@ struct ProjectBurnRateWidgetView: View {
             }
         }
         .padding(16)
-        .task(id: taskKey) { await load() }
-        .onDisappear { metricsStore.clear(widgetId: widgetId) }
+        .task(id: taskKey + "-\(dataCache.refreshVersion(for: widgetId))") { await load() }
     }
 
     // MARK: - Views
@@ -192,13 +192,21 @@ struct ProjectBurnRateWidgetView: View {
         )
     }
 
+    private var burnUpCacheKey: String { "\(widgetId):bu:\(taskKey)" }
+
     private func load() async {
         guard let cfg = configService.config, !config.parentIssues.isEmpty else { return }
+        if let cached = dataCache.cachedBurnUp(key: burnUpCacheKey) {
+            result = cached
+            publishMetrics(result: cached)
+            return
+        }
         isLoading = true
         error = nil
         defer { isLoading = false }
         do {
             let r = try await JiraService(config: cfg).fetchBurnUp(config: config)
+            dataCache.store(burnUp: r, key: burnUpCacheKey)
             result = r
             publishMetrics(result: r)
         } catch {

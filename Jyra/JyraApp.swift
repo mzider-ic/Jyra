@@ -4,12 +4,14 @@ import SwiftUI
 struct JyraApp: App {
     @State private var configService = ConfigService()
     @State private var metricsStore = MetricsStore()
+    @State private var dataCache = JiraDataCache()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(configService)
                 .environment(metricsStore)
+                .environment(dataCache)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 800)

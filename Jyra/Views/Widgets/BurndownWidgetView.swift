@@ -6,6 +6,7 @@ struct BurndownWidgetView: View {
     let widgetId: String
     @Environment(ConfigService.self) private var configService
     @Environment(MetricsStore.self) private var metricsStore
+    @Environment(JiraDataCache.self) private var dataCache
 
     @State private var result: BurndownResult? = nil
     @State private var isLoading = false
@@ -25,10 +26,9 @@ struct BurndownWidgetView: View {
             }
         }
         .padding(16)
-        .task(id: "\(config.boardId)-\(config.sprintId.displayValue)") {
+        .task(id: "\(config.boardId)-\(config.sprintId.displayValue)-\(dataCache.refreshVersion(for: widgetId))") {
             await load()
         }
-        .onDisappear { metricsStore.clear(widgetId: widgetId) }
     }
 
     private func errorView(_ msg: String) -> some View {
@@ -157,13 +157,21 @@ struct BurndownWidgetView: View {
         metricsStore.publish(widgetId: widgetId, title: result.sprintName, type: .burndown, metrics: metrics)
     }
 
+    private var cacheKey: String { "\(widgetId):bd:\(config.boardId)-\(config.sprintId.displayValue)" }
+
     private func load() async {
+        if let cached = dataCache.cachedBurndown(key: cacheKey) {
+            result = cached
+            publishMetrics(result: cached)
+            return
+        }
         guard let cfg = configService.config else { return }
         isLoading = true
         error = nil
         defer { isLoading = false }
         do {
             let r = try await JiraService(config: cfg).fetchBurndown(config: config)
+            dataCache.store(burndown: r, key: cacheKey)
             result = r
             publishMetrics(result: r)
         } catch {

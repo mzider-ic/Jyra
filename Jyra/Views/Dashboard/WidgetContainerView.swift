@@ -38,6 +38,7 @@ struct WidgetContainerView: View {
     @Environment(ConfigService.self) private var configService
     @Environment(DashboardService.self) private var dashboardService
     @Environment(MetricsStore.self) private var metricsStore
+    @Environment(JiraDataCache.self) private var dataCache
     @State private var isAddingWidget = false
     @State private var configuringWidget: Widget? = nil
     @State private var draggingId: String? = nil
@@ -132,6 +133,14 @@ struct WidgetContainerView: View {
             Label(widgetTitle(widget), systemImage: widgetIcon(widget.type))
                 .font(.subheadline.bold())
             Spacer()
+            Button {
+                dataCache.forceRefresh(widgetId: widget.id)
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .fixedSize()
             Menu {
                 Button("Configure…") { configuringWidget = widget }
                 Divider()

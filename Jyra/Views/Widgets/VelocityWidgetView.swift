@@ -8,6 +8,7 @@ struct VelocityWidgetView: View {
     let widgetId: String
     @Environment(ConfigService.self) private var configService
     @Environment(MetricsStore.self) private var metricsStore
+    @Environment(JiraDataCache.self) private var dataCache
 
     @State private var entries: [VelocityEntry] = []
     @State private var isLoading = false
@@ -37,8 +38,7 @@ struct VelocityWidgetView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, minHeight: 340, alignment: .top)
-        .task { await load() }
-        .onDisappear { metricsStore.clear(widgetId: widgetId) }
+        .task(id: dataCache.refreshVersion(for: widgetId)) { await load() }
         .onTapGesture { if !entries.isEmpty { showExpanded = true } }
         .sheet(isPresented: $showExpanded) {
             VStack(alignment: .leading, spacing: 12) {
@@ -105,18 +105,27 @@ struct VelocityWidgetView: View {
             metrics: [
                 WidgetMetric(id: "avg_velocity", name: "Avg Velocity", value: "\(Int(avgVelocity.rounded())) pts", icon: "chart.bar.fill", rawValue: avgVelocity),
                 WidgetMetric(id: "avg_completion", name: "Avg Completion", value: "\(Int(avgCompletion.rounded()))%", icon: "percent", rawValue: avgCompletion),
-                WidgetMetric(id: "predicted_capacity", name: "Predicted Capacity", value: "\(Int(predicted.rounded())) pts", icon: "chart.line.uptrend.xyaxis", rawValue: predicted),
+                WidgetMetric(id: "predicted_capacity", name: "Predicted Capacity", value: "\(Int(predicted.rounded())) pts", icon: "chart.line.uptrend.xyaxis"),
             ]
         )
     }
 
+    private var cacheKey: String { "\(widgetId):v:\(config.boardId)" }
+
     private func load() async {
+        if let cached = dataCache.cachedVelocity(key: cacheKey) {
+            entries = cached
+            publishMetrics()
+            return
+        }
         guard let cfg = configService.config else { return }
         isLoading = true
         error = nil
         defer { isLoading = false }
         do {
-            entries = try await JiraService(config: cfg).fetchVelocityEntries(boardId: config.boardId)
+            let fetched = try await JiraService(config: cfg).fetchVelocityEntries(boardId: config.boardId)
+            dataCache.store(velocity: fetched, key: cacheKey)
+            entries = fetched
             publishMetrics()
         } catch {
             self.error = error.localizedDescription
