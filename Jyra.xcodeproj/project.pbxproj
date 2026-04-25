@@ -27,6 +27,8 @@
 		C0EDC127A39C7A3A6EB55E1A /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917BB02780EAD3B4A025ABE0 /* AppConfig.swift */; };
 		E257E483271B221720EF42D3 /* BurndownWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2810B3FAF1BDAC895C12E54 /* BurndownWidgetView.swift */; };
 		F04E7DCA1F30D1C07F65ECF1 /* WidgetContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088750E7FF213B7C30F97C9D /* WidgetContainerView.swift */; };
+		88D68503393F46C5ACD0DE8C /* NetworkLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0742A586B054C0AB9EBCA7F /* NetworkLogger.swift */; };
+		D5037E5D21134A519B9DE537 /* NetworkLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF8F7E2EB314BDF92C10EB0 /* NetworkLogView.swift */; };
 		A85D38B026EE4B788535768C /* JiraDataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A2E9F485FF74D8CA3842190 /* JiraDataCache.swift */; };
 		BBCD1234567890ABCDEF5678 /* MetricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABC1234567890ABCDEF1234 /* MetricsStore.swift */; };
 /* End PBXBuildFile section */
@@ -55,6 +57,8 @@
 		DF726889D7D43F61D5A72426 /* Charts.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Charts.framework; path = System/Library/Frameworks/Charts.framework; sourceTree = SDKROOT; };
 		DFB1988ADB3E33AE02669E31 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		EB389994BE1EAAA054D33843 /* ProjectBurnRateWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectBurnRateWidgetView.swift; sourceTree = "<group>"; };
+		C0742A586B054C0AB9EBCA7F /* NetworkLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLogger.swift; sourceTree = "<group>"; };
+		FDF8F7E2EB314BDF92C10EB0 /* NetworkLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLogView.swift; sourceTree = "<group>"; };
 		4A2E9F485FF74D8CA3842190 /* JiraDataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JiraDataCache.swift; sourceTree = "<group>"; };
 		AABC1234567890ABCDEF1234 /* MetricsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -113,6 +117,7 @@
 				4A2E9F485FF74D8CA3842190 /* JiraDataCache.swift */,
 				10250A20A651EEF24A547028 /* JiraService.swift */,
 				AABC1234567890ABCDEF1234 /* MetricsStore.swift */,
+				C0742A586B054C0AB9EBCA7F /* NetworkLogger.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -141,6 +146,7 @@
 				6AB76304059215BD287AFD00 /* Shared */,
 				AA3AC4E6234B02BF48A1E90A /* Widgets */,
 				5AC2BFABF7B83DC235406B3B /* SettingsView.swift */,
+				FDF8F7E2EB314BDF92C10EB0 /* NetworkLogView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -255,6 +261,8 @@
 				90F92D70CAEF7B4F601A800A /* JiraModels.swift in Sources */,
 				A85D38B026EE4B788535768C /* JiraDataCache.swift in Sources */,
 				64244527F131FE5C2414553E /* JiraService.swift in Sources */,
+				88D68503393F46C5ACD0DE8C /* NetworkLogger.swift in Sources */,
+				D5037E5D21134A519B9DE537 /* NetworkLogView.swift in Sources */,
 				83B3292E056AD537AFF4BEB4 /* JyraApp.swift in Sources */,
 				BBCD1234567890ABCDEF5678 /* MetricsStore.swift in Sources */,
 				0C11241A3118FC810BD343C9 /* ProjectBurnRateWidgetView.swift in Sources */,

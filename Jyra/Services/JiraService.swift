@@ -182,7 +182,15 @@ actor JiraService {
             return nil
         }()
 
-        async let issuesResp = fetchSprintIssues(boardId: config.boardId, sprintId: sprintId, pointsField: config.pointsField)
+        // Auto-detect preferred points field when none is configured
+        let pointsField: String
+        if config.pointsField.isEmpty {
+            pointsField = (try? await fetchPreferredPointsField())?.id ?? "story_points"
+        } else {
+            pointsField = config.pointsField
+        }
+
+        async let issuesResp = fetchSprintIssues(boardId: config.boardId, sprintId: sprintId, pointsField: pointsField)
         async let sprintsResp = fetchSprints(boardId: config.boardId)
 
         let (issues, sprints) = try await (issuesResp, sprintsResp)
@@ -604,9 +612,34 @@ actor JiraService {
         request.setValue(config.authHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await session.data(for: request)
+        let start = Date()
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            NetworkLogger.shared.enqueue(.init(
+                timestamp: start, method: "GET",
+                url: request.url?.absoluteString ?? path,
+                statusCode: nil, duration: Date().timeIntervalSince(start),
+                requestBody: nil, responseBody: nil, error: error.localizedDescription
+            ))
+            throw error
+        }
+        let duration = Date().timeIntervalSince(start)
+        let http = response as? HTTPURLResponse
 
-        guard let http = response as? HTTPURLResponse else { throw JiraError.invalidResponse }
+        if NetworkLogger.isEnabledGlobal {
+            NetworkLogger.shared.enqueue(.init(
+                timestamp: start, method: "GET",
+                url: request.url?.absoluteString ?? path,
+                statusCode: http?.statusCode, duration: duration,
+                requestBody: nil, responseBody: prettyJSON(data),
+                error: http.map { (200..<300).contains($0.statusCode) ? nil : "HTTP \($0.statusCode)" } ?? nil
+            ))
+        }
+
+        guard let http else { throw JiraError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw JiraError.httpError(http.statusCode, body)
@@ -628,16 +661,61 @@ actor JiraService {
         request.setValue(config.authHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw JiraError.invalidResponse }
+        let start = Date()
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            NetworkLogger.shared.enqueue(.init(
+                timestamp: start, method: "GET",
+                url: request.url?.absoluteString ?? path,
+                statusCode: nil, duration: Date().timeIntervalSince(start),
+                requestBody: nil, responseBody: nil, error: error.localizedDescription
+            ))
+            throw error
+        }
+        let duration = Date().timeIntervalSince(start)
+        let http = response as? HTTPURLResponse
+
+        guard let http else { throw JiraError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
+            if NetworkLogger.isEnabledGlobal {
+                NetworkLogger.shared.enqueue(.init(
+                    timestamp: start, method: "GET",
+                    url: request.url?.absoluteString ?? path,
+                    statusCode: http.statusCode, duration: duration,
+                    requestBody: nil, responseBody: body, error: "HTTP \(http.statusCode)"
+                ))
+            }
             throw JiraError.httpError(http.statusCode, body)
         }
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw JiraError.invalidResponse
         }
+        if NetworkLogger.isEnabledGlobal {
+            let body = (try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            NetworkLogger.shared.enqueue(.init(
+                timestamp: start, method: "GET",
+                url: request.url?.absoluteString ?? path,
+                statusCode: http.statusCode, duration: duration,
+                requestBody: nil, responseBody: body, error: nil
+            ))
+        }
         return json
+    }
+
+    private func prettyJSON(_ data: Data) -> String {
+        let limit = 20_000
+        if let obj = try? JSONSerialization.jsonObject(with: data),
+           let pretty = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
+           let str = String(data: pretty, encoding: .utf8) {
+            return str.count <= limit ? str : String(str.prefix(limit)) + "\n…(truncated)"
+        }
+        let raw = String(data: data.prefix(limit), encoding: .utf8) ?? ""
+        return raw.isEmpty ? "<empty>" : raw
     }
 
     private func decodeWithDynamicPoints<T: Decodable>(data: Data, pointsField: String) throws -> T {

@@ -23,6 +23,18 @@ struct JyraApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            CommandMenu("Debug") {
+                Button("Network Log…") {
+                    NotificationCenter.default.post(name: .showNetworkLog, object: nil)
+                }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Clear Network Log") {
+                    NetworkLogger.shared.clear()
+                }
+            }
         }
 
         Settings {

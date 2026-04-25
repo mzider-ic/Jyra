@@ -294,17 +294,27 @@ const server = http.createServer((req, res) => {
   const parsed = url.parse(req.url, true)
   const path   = parsed.pathname
   const q      = parsed.query
+  const t0     = Date.now()
 
   res.setHeader('Content-Type', 'application/json')
   res.setHeader('Access-Control-Allow-Origin', '*')
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
 
-  console.log(`  ${req.method} ${req.url}`)
+  function send(body, status = 200) {
+    const bodyStr = JSON.stringify(body)
+    const ms      = Date.now() - t0
+    const bytes   = Buffer.byteLength(bodyStr)
+    const size    = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${bytes}B`
+    const color   = status < 300 ? '\x1b[32m' : status < 500 ? '\x1b[33m' : '\x1b[31m'
+    console.log(`  ${color}${req.method} ${status}\x1b[0m  ${String(ms + 'ms').padEnd(6)}  ${size.padStart(7)}  ${req.url}`)
+    res.writeHead(status)
+    res.end(bodyStr)
+  }
 
-  function send(body, status = 200) { res.writeHead(status); res.end(JSON.stringify(body)) }
   function notFound() {
-    console.warn(`  404 — no handler for: ${path}`)
+    const ms = Date.now() - t0
+    console.warn(`  \x1b[31m${req.method} 404\x1b[0m  ${ms}ms            ${req.url}`)
     res.writeHead(404)
     res.end(JSON.stringify({ message: `Mock: unhandled path ${path}` }))
   }
