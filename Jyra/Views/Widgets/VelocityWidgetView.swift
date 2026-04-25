@@ -95,6 +95,9 @@ struct VelocityWidgetView: View {
         let avgCompletion: Double = eligible.isEmpty ? 0 : eligible.map { e in
             min(100, max(0, (e.completed / e.committed) * 100))
         }.reduce(0, +) / Double(eligible.count)
+        // Rolling average of last 3 closed sprints — standard sprint planning input
+        let recent = eligible.suffix(3)
+        let predicted: Double = recent.isEmpty ? 0 : recent.map(\.completed).reduce(0, +) / Double(recent.count)
         metricsStore.publish(
             widgetId: widgetId,
             title: config.displayTitle,
@@ -102,6 +105,7 @@ struct VelocityWidgetView: View {
             metrics: [
                 WidgetMetric(id: "avg_velocity", name: "Avg Velocity", value: "\(Int(avgVelocity.rounded())) pts", icon: "chart.bar.fill", rawValue: avgVelocity),
                 WidgetMetric(id: "avg_completion", name: "Avg Completion", value: "\(Int(avgCompletion.rounded()))%", icon: "percent", rawValue: avgCompletion),
+                WidgetMetric(id: "predicted_capacity", name: "Predicted Capacity", value: "\(Int(predicted.rounded())) pts", icon: "chart.line.uptrend.xyaxis", rawValue: predicted),
             ]
         )
     }
@@ -158,6 +162,7 @@ private struct VelocityChartContent: View {
         let eligible = eligibleCompletionEntries
         let avg = averageVelocity(entries: entries)
         let avgCompletion = averageCompletion(entries: eligible)
+        let predicted = predictedCapacity
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Last \(entries.count) sprints")
@@ -168,9 +173,14 @@ private struct VelocityChartContent: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text("Avg velocity: \(Int(avg)) pts")
-                .font(.caption.bold())
-                .foregroundStyle(palette.averageColor)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Avg velocity: \(Int(avg)) pts")
+                    .font(.caption.bold())
+                    .foregroundStyle(palette.averageColor)
+                Text("Predicted: \(Int(predicted.rounded())) pts")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -195,6 +205,12 @@ private struct VelocityChartContent: View {
 
     private var eligibleCompletionEntries: [VelocityEntry] {
         entries.filter { !$0.isActive && $0.committed > 0 }
+    }
+
+    private var predictedCapacity: Double {
+        let recent = eligibleCompletionEntries.suffix(3)
+        guard !recent.isEmpty else { return 0 }
+        return recent.map(\.completed).reduce(0, +) / Double(recent.count)
     }
 
     private func averageVelocity(entries: [VelocityEntry]) -> Double {
