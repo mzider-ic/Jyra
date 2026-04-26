@@ -1,71 +1,138 @@
 import SwiftUI
 
+// Unified selection for dashboards, boards, and calibrations
+enum AppSelection: Hashable {
+    case dashboard(String)
+    case board(String)
+    case calibration(String)
+}
+
 struct DashboardView: View {
-    @Environment(ConfigService.self) private var configService
+    @Environment(ConfigService.self)      private var configService
+    @Environment(BoardService.self)       private var boardService
+    @Environment(CalibrationService.self) private var calibrationService
     @State private var dashboardService = DashboardService()
-    @State private var selectedId: String? = nil
+    @State private var selection: AppSelection? = nil
+
+    // Dashboard sheet state
     @State private var isAddingDashboard = false
     @State private var newDashboardName = ""
     @State private var renamingDashboard: Dashboard? = nil
     @State private var renameText = ""
 
-    private var selectedIndex: Int? {
-        dashboardService.dashboards.firstIndex(where: { $0.id == selectedId })
-    }
+    // Board sheet state
+    @State private var isAddingBoard = false
+    @State private var configuringBoard: Board? = nil
+
+    // Calibration sheet state
+    @State private var isAddingCalibration   = false
+    @State private var configuringCalibration: CalibrationConfig? = nil
 
     var body: some View {
         NavigationSplitView {
             sidebar
         } detail: {
-            if let idx = selectedIndex {
-                WidgetContainerView(dashboard: Bindable(dashboardService).dashboards[idx])
-                    .environment(configService)
-                    .environment(dashboardService)
-                    .id(selectedId)
-            } else {
-                emptyState
-            }
+            detailView
+                .environment(dashboardService)
         }
-        .onAppear {
-            if selectedId == nil {
-                selectedId = dashboardService.dashboards.first?.id
+        .onAppear { selectFirstIfNeeded() }
+    }
+
+    // MARK: - Detail
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch selection {
+        case .dashboard(let id):
+            if let idx = dashboardService.dashboards.firstIndex(where: { $0.id == id }) {
+                WidgetContainerView(dashboard: Bindable(dashboardService).dashboards[idx])
+                    .id(id)
+            } else {
+                emptyState(icon: "chart.bar.doc.horizontal", label: "No Dashboard Selected")
             }
+        case .board(let id):
+            if let board = boardService.boards.first(where: { $0.id == id }) {
+                BoardView(board: board)
+                    .id(id)
+            } else {
+                emptyState(icon: "square.grid.3x1.below.line.grid.1x2", label: "No Board Selected")
+            }
+        case .calibration(let id):
+            if let cal = calibrationService.calibrations.first(where: { $0.id == id }) {
+                CalibrationView(calibration: cal)
+                    .id(id)
+                    .environment(calibrationService)
+            } else {
+                emptyState(icon: "chart.bar.xaxis.ascending", label: "No Calibration Selected")
+            }
+        case nil:
+            emptyState(icon: "chart.bar.doc.horizontal", label: "Select an item from the sidebar")
         }
     }
 
+    // MARK: - Sidebar
+
     private var sidebar: some View {
-        List(dashboardService.dashboards, selection: $selectedId) { dash in
-            Label(dash.name, systemImage: "chart.bar.doc.horizontal")
-                .tag(dash.id)
-                .contextMenu {
-                    Button("Rename…") {
-                        renamingDashboard = dash
-                        renameText = dash.name
-                    }
-                    Divider()
-                    Button("Delete", role: .destructive) {
-                        let wasSelected = selectedId == dash.id
-                        dashboardService.delete(dash)
-                        if wasSelected {
-                            selectedId = dashboardService.dashboards.first?.id
+        List(selection: $selection) {
+            Section("Dashboards") {
+                ForEach(dashboardService.dashboards) { dash in
+                    Label(dash.name, systemImage: "chart.bar.doc.horizontal")
+                        .tag(AppSelection.dashboard(dash.id))
+                        .contextMenu {
+                            Button("Rename…") {
+                                renamingDashboard = dash
+                                renameText = dash.name
+                            }
+                            Divider()
+                            Button("Delete", role: .destructive) {
+                                let wasSelected = selection == .dashboard(dash.id)
+                                dashboardService.delete(dash)
+                                if wasSelected { selectFirstIfNeeded(force: true) }
+                            }
                         }
-                    }
                 }
+            }
+
+            Section("Boards") {
+                ForEach(boardService.boards) { board in
+                    Label(board.name, systemImage: "square.grid.3x1.below.line.grid.1x2")
+                        .tag(AppSelection.board(board.id))
+                        .contextMenu {
+                            Button("Configure…") { configuringBoard = board }
+                            Divider()
+                            Button("Delete", role: .destructive) {
+                                let wasSelected = selection == .board(board.id)
+                                boardService.delete(board)
+                                if wasSelected { selectFirstIfNeeded(force: true) }
+                            }
+                        }
+                }
+            }
+
+            Section("Calibration") {
+                ForEach(calibrationService.calibrations) { cal in
+                    Label(cal.name, systemImage: "chart.bar.xaxis.ascending")
+                        .tag(AppSelection.calibration(cal.id))
+                        .contextMenu {
+                            Button("Configure…") { configuringCalibration = cal }
+                            Divider()
+                            Button("Delete", role: .destructive) {
+                                let wasSelected = selection == .calibration(cal.id)
+                                calibrationService.delete(cal)
+                                if wasSelected { selectFirstIfNeeded(force: true) }
+                            }
+                        }
+                }
+            }
         }
         .navigationTitle("Jyra")
         .safeAreaInset(edge: .bottom) {
-            Button {
-                isAddingDashboard = true
-                newDashboardName = ""
-            } label: {
-                Label("New Dashboard", systemImage: "plus")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+            VStack(spacing: 0) {
+                Divider()
+                addButtons
             }
-            .buttonStyle(.plain)
-            .padding(8)
         }
+        // Dashboard sheets
         .sheet(isPresented: $isAddingDashboard) {
             nameSheet(
                 title: "New Dashboard",
@@ -74,7 +141,7 @@ struct DashboardView: View {
                     let name = newDashboardName.trimmingCharacters(in: .whitespaces)
                     guard !name.isEmpty else { return }
                     dashboardService.add(name: name)
-                    selectedId = dashboardService.dashboards.last?.id
+                    selection = dashboardService.dashboards.last.map { .dashboard($0.id) }
                     isAddingDashboard = false
                 },
                 onCancel: { isAddingDashboard = false }
@@ -93,14 +160,91 @@ struct DashboardView: View {
                 onCancel: { renamingDashboard = nil }
             )
         }
+        // Board sheets
+        .sheet(isPresented: $isAddingBoard) {
+            BoardConfigView(board: nil) {
+                isAddingBoard = false
+                selection = boardService.boards.last.map { .board($0.id) }
+            }
+            .environment(configService)
+            .environment(boardService)
+        }
+        .sheet(item: $configuringBoard) { board in
+            BoardConfigView(board: board) { configuringBoard = nil }
+                .environment(configService)
+                .environment(boardService)
+        }
+        // Calibration sheets
+        .sheet(isPresented: $isAddingCalibration) {
+            CalibrationConfigView(calibration: CalibrationConfig(name: "")) { updated in
+                if let u = updated {
+                    calibrationService.add(u)
+                    selection = .calibration(u.id)
+                }
+                isAddingCalibration = false
+            }
+            .environment(configService)
+            .environment(calibrationService)
+        }
+        .sheet(item: $configuringCalibration) { cal in
+            CalibrationConfigView(calibration: cal) { updated in
+                if let u = updated { calibrationService.update(u) }
+                configuringCalibration = nil
+            }
+            .environment(configService)
+            .environment(calibrationService)
+        }
     }
 
-    private var emptyState: some View {
-        ContentUnavailableView(
-            "No Dashboard Selected",
-            systemImage: "chart.bar.doc.horizontal",
-            description: Text("Create a dashboard from the sidebar to get started.")
-        )
+    // MARK: - Add buttons
+
+    private var addButtons: some View {
+        VStack(spacing: 0) {
+            addButton(label: "New Dashboard", icon: "chart.bar.doc.horizontal.fill") {
+                isAddingDashboard = true
+                newDashboardName = ""
+            }
+            Divider().padding(.leading, 16)
+            addButton(label: "New Board", icon: "square.grid.3x1.below.line.grid.1x2.fill") {
+                isAddingBoard = true
+            }
+            Divider().padding(.leading, 16)
+            addButton(label: "New Calibration", icon: "chart.bar.xaxis.ascending.badge.clock") {
+                isAddingCalibration = true
+            }
+        }
+        .padding(8)
+    }
+
+    private func addButton(label: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Empty state
+
+    private func emptyState(icon: String, label: String) -> some View {
+        ContentUnavailableView(label, systemImage: icon)
+    }
+
+    // MARK: - Helpers
+
+    private func selectFirstIfNeeded(force: Bool = false) {
+        guard selection == nil || force else { return }
+        if let first = dashboardService.dashboards.first {
+            selection = .dashboard(first.id)
+        } else if let first = boardService.boards.first {
+            selection = .board(first.id)
+        } else if let first = calibrationService.calibrations.first {
+            selection = .calibration(first.id)
+        } else {
+            selection = nil
+        }
     }
 
     private func nameSheet(

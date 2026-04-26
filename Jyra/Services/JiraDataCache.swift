@@ -7,9 +7,10 @@ final class JiraDataCache {
         let date: Date
     }
 
-    private var velocityCache: [String: Entry<[VelocityEntry]>] = [:]
-    private var burndownCache: [String: Entry<BurndownResult>] = [:]
-    private var burnUpCache: [String: Entry<BurnUpResult>] = [:]
+    private var velocityCache:  [String: Entry<[VelocityEntry]>] = [:]
+    private var burndownCache:  [String: Entry<BurndownResult>]  = [:]
+    private var burnUpCache:    [String: Entry<BurnUpResult>]    = [:]
+    private var boardCache:     [String: Entry<[BoardIssue]>]    = [:]
     private(set) var refreshVersions: [String: Int] = [:]
 
     private let ttl: TimeInterval = 300  // 5 minutes
@@ -26,6 +27,7 @@ final class JiraDataCache {
         velocityCache = velocityCache.filter { !$0.key.hasPrefix(prefix) }
         burndownCache = burndownCache.filter { !$0.key.hasPrefix(prefix) }
         burnUpCache   = burnUpCache.filter   { !$0.key.hasPrefix(prefix) }
+        boardCache    = boardCache.filter    { !$0.key.hasPrefix(prefix) }
     }
 
     // MARK: - Velocity
@@ -59,5 +61,16 @@ final class JiraDataCache {
 
     func store(burnUp: BurnUpResult, key: String) {
         burnUpCache[key] = Entry(value: burnUp, date: Date())
+    }
+
+    // MARK: - Board issues
+
+    func cachedBoardIssues(key: String) -> [BoardIssue]? {
+        guard let e = boardCache[key], Date().timeIntervalSince(e.date) < ttl else { return nil }
+        return e.value
+    }
+
+    func store(boardIssues: [BoardIssue], key: String) {
+        boardCache[key] = Entry(value: boardIssues, date: Date())
     }
 }

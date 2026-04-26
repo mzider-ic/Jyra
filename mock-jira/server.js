@@ -267,6 +267,185 @@ function jqlFilter(jql) {
   return { issues: [] }
 }
 
+// ── Calibration sprint data ───────────────────────────────────────────────────
+// These issues are returned when expand=changelog is requested on the sprint
+// issues endpoint. Each issue includes accountId, displayName, and a changelog
+// with status transition history so CalibrationView can compute cycle times.
+
+// Engineers that appear in calibration data
+const CAL_ENGINEERS = {
+  'alice-001':   { accountId: 'alice-001',   displayName: 'Alice Smith'  },
+  'bob-001':     { accountId: 'bob-001',     displayName: 'Bob Johnson'  },
+  'carol-001':   { accountId: 'carol-001',   displayName: 'Carol White'  },
+  'charlie-001': { accountId: 'charlie-001', displayName: 'Charlie Kim'  },
+  'diana-001':   { accountId: 'diana-001',   displayName: 'Diana Lee'    },
+  'eve-001':     { accountId: 'eve-001',     displayName: 'Eve Martinez' },
+  'frank-001':   { accountId: 'frank-001',   displayName: 'Frank Chen'   },
+}
+
+function calIssue(id, key, pts, engineerId, done, ipDaysAgo, doneDaysAgo, summary) {
+  const assignee = engineerId ? CAL_ENGINEERS[engineerId] : null
+  const histories = []
+  if (ipDaysAgo != null) {
+    histories.push({
+      created: daysAgo(ipDaysAgo),
+      items: [{ field: 'status', fromString: 'To Do', toString: 'In Progress' }],
+    })
+  }
+  if (done && doneDaysAgo != null) {
+    histories.push({
+      created: daysAgo(doneDaysAgo),
+      items: [{ field: 'status', fromString: 'In Progress', toString: 'Done' }],
+    })
+  }
+  return {
+    id: String(id), key,
+    fields: {
+      summary: summary || key,
+      status: {
+        name: done ? 'Done' : (ipDaysAgo != null ? 'In Progress' : 'To Do'),
+        statusCategory: { key: done ? 'done' : (ipDaysAgo != null ? 'indeterminate' : 'new') },
+      },
+      story_points: pts,
+      assignee: assignee || null,
+    },
+    changelog: { histories },
+  }
+}
+
+// Board 101 (Lone Wolf) calibration issues by sprint
+// Sprint 1001: closed, ran ~18–4 days ago
+// Sprint 1002: active, started ~4 days ago
+//
+// Engineers: alice-001 (→ Senior Eng), bob-001 (→ Eng), carol-001 (→ Eng)
+// Relative workloads (2 sprints, team committed 21+19=40 pts):
+//   alice: 18 pts done → 45%    bob: 6 pts → 15%    carol: 3 pts → 7.5%
+const CAL_SPRINT_101_1001 = [
+  calIssue(31001,'LW-C1', 5,'alice-001', true,  16, 12, 'Project scaffolding'),
+  calIssue(31002,'LW-C2', 8,'alice-001', true,  15, 11, 'Core authentication'),
+  calIssue(31003,'LW-C3', 3,'bob-001',   true,  16, 11, 'Unit test suite setup'),
+  calIssue(31004,'LW-C4', 3,'carol-001', true,  15, 12, 'CI pipeline config'),
+  calIssue(31005,'LW-C5', 2,null,        false, null,null,'Unassigned backlog task'),
+]
+
+const CAL_SPRINT_101_1002 = [
+  calIssue(31006,'LW-C6', 5,'alice-001', true,  4,  2,  'Auth middleware refactor'),
+  calIssue(31007,'LW-C7', 3,'bob-001',   true,  3,  2,  'Fix login redirect bug'),
+  calIssue(31008,'LW-C8', 8,'bob-001',   false, 3,  null,'Rate limiting design'),
+  calIssue(31009,'LW-C9', 3,'carol-001', false, 4,  null,'DB schema migration'),
+]
+
+// Board 102 (Velocity Kings) calibration issues by sprint
+// Engineers: charlie-001 (→ Staff), diana-001 (→ Sr Eng), eve-001 (→ Eng), frank-001 (→ Eng)
+// Using last 3 closed sprints (2010, 2011, 2012) + active (2013)
+// Sprint 2010: closed, ran ~46–32 days ago
+// Sprint 2011: closed, ran ~32–18 days ago
+// Sprint 2012: closed, ran ~18–4 days ago
+// Sprint 2013: active, started ~4 days ago
+//
+// Relative workloads (team committed 54+52+48+37=191 pts):
+//   charlie: 76 pts → 39.8%  diana: 47 pts → 24.6%
+//   frank: 26 pts → 13.6%    eve: 19 pts → 9.9%
+const CAL_SPRINT_102_2010 = [
+  calIssue(32001,'VK-C1', 13,'charlie-001', true,  45, 39, 'Platform service mesh'),
+  calIssue(32002,'VK-C2',  8,'charlie-001', true,  44, 38, 'Service discovery setup'),
+  calIssue(32003,'VK-C3',  8,'diana-001',   true,  44, 39, 'Auth service v2'),
+  calIssue(32004,'VK-C4',  5,'diana-001',   true,  43, 38, 'JWT refresh tokens'),
+  calIssue(32005,'VK-C5',  8,'eve-001',     true,  44, 38, 'Frontend routing rebuild'),
+  calIssue(32006,'VK-C6',  5,'frank-001',   true,  45, 38, 'Notification service'),
+  calIssue(32007,'VK-C7',  3,'frank-001',   true,  44, 39, 'Analytics event hooks'),
+  calIssue(32008,'VK-C8',  4,null,          false, null,null,'Unassigned infra spike'),
+]
+
+const CAL_SPRINT_102_2011 = [
+  calIssue(32101,'VK-C9',  13,'charlie-001', true,  31, 25, 'Caching layer impl'),
+  calIssue(32102,'VK-C10',  8,'charlie-001', true,  30, 24, 'DB connection pooling'),
+  calIssue(32103,'VK-C11',  8,'diana-001',   true,  31, 25, 'OAuth 2.0 integration'),
+  calIssue(32104,'VK-C12',  5,'diana-001',   true,  30, 25, 'Session management'),
+  calIssue(32105,'VK-C13',  3,'eve-001',     true,  30, 25, 'Mobile nav redesign'),
+  calIssue(32106,'VK-C14',  8,'frank-001',   true,  31, 24, 'API versioning support'),
+  calIssue(32107,'VK-C15',  7,null,          false, null,null,'Unassigned task'),
+]
+
+const CAL_SPRINT_102_2012 = [
+  calIssue(32201,'VK-C16', 13,'charlie-001', true,  17, 11, 'Deploy pipeline v3'),
+  calIssue(32202,'VK-C17',  8,'charlie-001', true,  16, 10, 'Container orchestration'),
+  calIssue(32203,'VK-C18',  8,'diana-001',   true,  17, 11, 'Rate limiting middleware'),
+  calIssue(32204,'VK-C19',  5,'diana-001',   true,  16, 11, 'API gateway setup'),
+  calIssue(32205,'VK-C20',  5,'eve-001',     true,  16, 11, 'Dark mode implementation'),
+  calIssue(32206,'VK-C21',  8,'frank-001',   true,  17, 10, 'Email template system'),
+  calIssue(32207,'VK-C22',  1,null,          false, null,null,'Unassigned cleanup'),
+]
+
+const CAL_SPRINT_102_2013 = [
+  calIssue(32301,'VK-C23', 13,'charlie-001', true,  3,  1,  'Observability platform'),
+  calIssue(32302,'VK-C24',  8,'diana-001',   true,  4,  2,  'SAML SSO integration'),
+  calIssue(32303,'VK-C25',  3,'eve-001',     true,  3,  2,  'Accessibility fixes'),
+  calIssue(32304,'VK-C26',  5,'frank-001',   true,  4,  2,  'Push notification service'),
+  calIssue(32305,'VK-C27',  8,'charlie-001', false, 3,  null,'Feature flags system'),
+  calIssue(32306,'VK-C28',  5,'eve-001',     false, 3,  null,'Performance profiling'),
+  calIssue(32307,'VK-C29',  3,'frank-001',   false, 4,  null,'Audit log viewer'),
+  calIssue(32308,'VK-C30',  8,null,          false, null,null,'Unassigned epic breakdown'),
+]
+
+// Map sprint id → calibration issues (used when expand=changelog is requested)
+const CAL_SPRINT_ISSUES = {
+  1001: CAL_SPRINT_101_1001,
+  1002: CAL_SPRINT_101_1002,
+  2010: CAL_SPRINT_102_2010,
+  2011: CAL_SPRINT_102_2011,
+  2012: CAL_SPRINT_102_2012,
+  2013: CAL_SPRINT_102_2013,
+}
+
+// ── Board issues for the Boards feature ──────────────────────────────────────
+
+function boardIssue(id, key, summary, status, catKey, pts, assignee, priority, type, labels, updatedDaysAgo, description) {
+  return {
+    id: String(id), key,
+    fields: {
+      summary,
+      status: { name: status, statusCategory: { key: catKey } },
+      story_points: pts,
+      assignee: assignee ? { displayName: assignee } : null,
+      priority: { name: priority },
+      issuetype: { name: type },
+      labels: labels || [],
+      created: daysAgo(14),
+      updated: daysAgo(updatedDaysAgo),
+      description: description || null,
+      parent: null,
+    },
+  }
+}
+
+const BOARD_ISSUES = {
+  101: { total: 9, issues: [
+    boardIssue(20001,'LW-1','Set up CI/CD pipeline',            'To Do',       'new',           5,  null,          'Medium', 'Story',  [],                   10, 'Configure GitHub Actions for automated builds and deploys.'),
+    boardIssue(20002,'LW-2','Database schema migration',         'To Do',       'new',           8,  'Alice Smith',  'High',   'Story',  [],                   8,  null),
+    boardIssue(20003,'LW-3','Write API documentation',           'To Do',       'new',           3,  null,          'Low',    'Task',   [],                   7,  null),
+    boardIssue(20004,'LW-4','Implement authentication module',   'In Progress', 'indeterminate', 13, 'Bob Johnson',  'High',   'Story',  ['backend'],          3,  'JWT-based auth with refresh tokens.'),
+    boardIssue(20005,'LW-5','Design API rate limiting',          'In Progress', 'indeterminate', 5,  'Alice Smith',  'Medium', 'Task',   ['blocked'],          5,  'Blocked waiting on security review.'),
+    boardIssue(20006,'LW-6','Write unit tests for data layer',   'In Progress', 'indeterminate', 3,  'Carol White',  'Low',    'Task',   [],                   1,  null),
+    boardIssue(20007,'LW-7','Refactor legacy auth middleware',   'In Progress', 'indeterminate', 8,  'Bob Johnson',  'High',   'Story',  ['backend','urgent'],  6,  'This has been sitting here for a while.'),
+    boardIssue(20008,'LW-8','Project scaffolding and setup',     'Done',        'done',          5,  'Bob Johnson',  'High',   'Story',  [],                   10, null),
+    boardIssue(20009,'LW-9','Repository structure and branching','Done',        'done',          2,  'Alice Smith',  'Medium', 'Task',   [],                   11, null),
+  ]},
+  102: { total: 11, issues: [
+    boardIssue(20101,'VK-1','User onboarding flow redesign',     'To Do',       'new',           13, null,          'High',   'Story',  [],                   5,  'Complete redesign of the first-run experience.'),
+    boardIssue(20102,'VK-2','Mobile push notification support',  'To Do',       'new',           8,  'Dana Lee',    'Medium', 'Story',  [],                   3,  null),
+    boardIssue(20103,'VK-3','Analytics pipeline v2',             'To Do',       'new',           21, null,          'Critical','Epic',  [],                   2,  'Full pipeline rewrite for scale.'),
+    boardIssue(20104,'VK-4','Payment gateway integration',       'In Progress', 'indeterminate', 13, 'Eve Martinez', 'Critical','Story', ['backend','blocked'], 8,  'Blocked on merchant account approval.'),
+    boardIssue(20105,'VK-5','Reporting dashboard',               'In Progress', 'indeterminate', 8,  'Frank Chen',  'High',   'Story',  ['frontend'],         2,  null),
+    boardIssue(20106,'VK-6','Email notification templates',      'In Progress', 'indeterminate', 5,  'Dana Lee',    'Medium', 'Task',   [],                   1,  null),
+    boardIssue(20107,'VK-7','Performance profiling',             'In Progress', 'indeterminate', 5,  'Eve Martinez', 'High',  'Task',   ['urgent'],           7,  null),
+    boardIssue(20108,'VK-8','SSO implementation',                'In Progress', 'indeterminate', 13, 'Frank Chen',  'High',   'Story',  ['backend'],          4,  'SAML 2.0 and OIDC support.'),
+    boardIssue(20109,'VK-9','User profile page',                 'Done',        'done',          5,  'Dana Lee',    'Medium', 'Story',  [],                   12, null),
+    boardIssue(20110,'VK-10','Notification preferences',         'Done',        'done',          3,  'Frank Chen',  'Low',    'Task',   [],                   13, null),
+    boardIssue(20111,'VK-11','Dark mode support',                'Done',        'done',          8,  'Eve Martinez', 'Low',   'Story',  ['frontend'],         15, null),
+  ]},
+}
+
 // ── Index tables ──────────────────────────────────────────────────────────────
 
 const BOARDS = [
@@ -347,10 +526,29 @@ const server = http.createServer((req, res) => {
   }
 
   // /rest/agile/1.0/board/:id/sprint/:sprintId/issue
-  const sprintIssues = path.match(/^\/rest\/agile\/1\.0\/board\/(\d+)\/sprint\/\d+\/issue$/)
+  const sprintIssues = path.match(/^\/rest\/agile\/1\.0\/board\/(\d+)\/sprint\/(\d+)\/issue$/)
   if (sprintIssues) {
-    const boardId = parseInt(sprintIssues[1])
+    const boardId  = parseInt(sprintIssues[1])
+    const sprintId = parseInt(sprintIssues[2])
+    // Calibration requests include expand=changelog; serve rich data with engineers + changelog
+    if (q.expand && q.expand.includes('changelog') && CAL_SPRINT_ISSUES[sprintId]) {
+      const issues = CAL_SPRINT_ISSUES[sprintId]
+      return send({ issues, total: issues.length })
+    }
+    // Burndown / velocity: use existing board-level issue data
     return send(ISSUES_BY_BOARD[boardId] || { issues: [], total: 0 })
+  }
+
+  // /rest/agile/1.0/board/:id/issue  — board view (all active issues)
+  const boardIssues = path.match(/^\/rest\/agile\/1\.0\/board\/(\d+)\/issue$/)
+  if (boardIssues) {
+    const boardId  = parseInt(boardIssues[1])
+    const data     = BOARD_ISSUES[boardId]
+    const startAt  = parseInt(q.startAt || '0')
+    const maxRes   = parseInt(q.maxResults || '100')
+    if (!data) return send({ issues: [], total: 0, startAt: 0, maxResults: maxRes })
+    const page = data.issues.slice(startAt, startAt + maxRes)
+    return send({ issues: page, total: data.total, startAt, maxResults: maxRes })
   }
 
   // /rest/greenhopper/1.0/rapid/charts/velocity
@@ -417,6 +615,10 @@ server.listen(PORT, '127.0.0.1', () => {
   No-Dates Team  (201)  sprints with null start/end — velocity works, burndown errors
 
   Project Burn Rate scope: search "JYRA" in issue picker (JYRA-1 epic, 76 pts across 8 stories)
+
+  Calibration: boards 101 and 102 have rich engineer + changelog data (expand=changelog)
+    Board 101 engineers: alice-001 (Sr. Eng target), bob-001 (Eng), carol-001 (Eng)
+    Board 102 engineers: charlie-001 (Staff), diana-001 (Sr. Eng), eve-001 (Eng), frank-001 (Eng)
 
   Logs: /tmp/jyra-mock.log
   Stop: bash mock-jira/stop.sh

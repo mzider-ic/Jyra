@@ -31,6 +31,16 @@
 		D5037E5D21134A519B9DE537 /* NetworkLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF8F7E2EB314BDF92C10EB0 /* NetworkLogView.swift */; };
 		A85D38B026EE4B788535768C /* JiraDataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A2E9F485FF74D8CA3842190 /* JiraDataCache.swift */; };
 		BBCD1234567890ABCDEF5678 /* MetricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABC1234567890ABCDEF1234 /* MetricsStore.swift */; };
+		BD2222222222222222222222 /* BoardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD1111111111111111111111 /* BoardModels.swift */; };
+		BD4444444444444444444444 /* BoardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD3333333333333333333333 /* BoardService.swift */; };
+		BD6666666666666666666666 /* BoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD5555555555555555555555 /* BoardView.swift */; };
+		BD8888888888888888888888 /* BoardCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD7777777777777777777777 /* BoardCardView.swift */; };
+		BDAAAAAAAAAAAAAAAAAAAAAA /* BoardCardDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD9999999999999999999999 /* BoardCardDetailView.swift */; };
+		BDCCCCCCCCCCCCCCCCCCCCCC /* BoardConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBBBBBBBBBBBBBBBBBBBBBB /* BoardConfigView.swift */; };
+		CA2222222222222222222222 /* CalibrationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1111111111111111111111 /* CalibrationModels.swift */; };
+		CA4444444444444444444444 /* CalibrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3333333333333333333333 /* CalibrationService.swift */; };
+		CA6666666666666666666666 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5555555555555555555555 /* CalibrationView.swift */; };
+		CA8888888888888888888888 /* CalibrationConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7777777777777777777777 /* CalibrationConfigView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,6 +71,16 @@
 		FDF8F7E2EB314BDF92C10EB0 /* NetworkLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLogView.swift; sourceTree = "<group>"; };
 		4A2E9F485FF74D8CA3842190 /* JiraDataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JiraDataCache.swift; sourceTree = "<group>"; };
 		AABC1234567890ABCDEF1234 /* MetricsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsStore.swift; sourceTree = "<group>"; };
+		BD1111111111111111111111 /* BoardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardModels.swift; sourceTree = "<group>"; };
+		BD3333333333333333333333 /* BoardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardService.swift; sourceTree = "<group>"; };
+		BD5555555555555555555555 /* BoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardView.swift; sourceTree = "<group>"; };
+		BD7777777777777777777777 /* BoardCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardCardView.swift; sourceTree = "<group>"; };
+		BD9999999999999999999999 /* BoardCardDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardCardDetailView.swift; sourceTree = "<group>"; };
+		BDBBBBBBBBBBBBBBBBBBBBBB /* BoardConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardConfigView.swift; sourceTree = "<group>"; };
+		CA1111111111111111111111 /* CalibrationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationModels.swift; sourceTree = "<group>"; };
+		CA3333333333333333333333 /* CalibrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationService.swift; sourceTree = "<group>"; };
+		CA5555555555555555555555 /* CalibrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationView.swift; sourceTree = "<group>"; };
+		CA7777777777777777777777 /* CalibrationConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationConfigView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +99,8 @@
 			isa = PBXGroup;
 			children = (
 				917BB02780EAD3B4A025ABE0 /* AppConfig.swift */,
+				BD1111111111111111111111 /* BoardModels.swift */,
+				CA1111111111111111111111 /* CalibrationModels.swift */,
 				A2C35EDFB307432F1B629CC7 /* DashboardModels.swift */,
 				92619A65A4391E8187CCC168 /* JiraModels.swift */,
 			);
@@ -112,6 +134,8 @@
 		6AC9080EBD16166D14DC7CE3 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				BD3333333333333333333333 /* BoardService.swift */,
+				CA3333333333333333333333 /* CalibrationService.swift */,
 				A7A486C11E57C99E68EBFC63 /* ConfigService.swift */,
 				7FC90C470D99D483E7FFC310 /* DashboardService.swift */,
 				4A2E9F485FF74D8CA3842190 /* JiraDataCache.swift */,
@@ -138,9 +162,20 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		CA9999999999999999999999 /* Calibration */ = {
+			isa = PBXGroup;
+			children = (
+				CA5555555555555555555555 /* CalibrationView.swift */,
+				CA7777777777777777777777 /* CalibrationConfigView.swift */,
+			);
+			path = Calibration;
+			sourceTree = "<group>";
+		};
 		92E66CD89715CBD99DAF117A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				BDDDDDDDDDDDDDDDDDDDDDDD /* Boards */,
+				CA9999999999999999999999 /* Calibration */,
 				AD77A696EA09267ACE8F0171 /* Dashboard */,
 				C84D53A30D2322D13CC6B969 /* Setup */,
 				6AB76304059215BD287AFD00 /* Shared */,
@@ -149,6 +184,17 @@
 				FDF8F7E2EB314BDF92C10EB0 /* NetworkLogView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		BDDDDDDDDDDDDDDDDDDDDDDD /* Boards */ = {
+			isa = PBXGroup;
+			children = (
+				BD5555555555555555555555 /* BoardView.swift */,
+				BD7777777777777777777777 /* BoardCardView.swift */,
+				BD9999999999999999999999 /* BoardCardDetailView.swift */,
+				BDBBBBBBBBBBBBBBBBBBBBBB /* BoardConfigView.swift */,
+			);
+			path = Boards;
 			sourceTree = "<group>";
 		};
 		AA3AC4E6234B02BF48A1E90A /* Widgets */ = {
@@ -249,7 +295,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				C0EDC127A39C7A3A6EB55E1A /* AppConfig.swift in Sources */,
+				BD2222222222222222222222 /* BoardModels.swift in Sources */,
 				4A047A00B61C498AAED0F0CF /* BoardSearchField.swift in Sources */,
+				BD4444444444444444444444 /* BoardService.swift in Sources */,
+				BD6666666666666666666666 /* BoardView.swift in Sources */,
+				BD8888888888888888888888 /* BoardCardView.swift in Sources */,
+				BDAAAAAAAAAAAAAAAAAAAAAA /* BoardCardDetailView.swift in Sources */,
+				BDCCCCCCCCCCCCCCCCCCCCCC /* BoardConfigView.swift in Sources */,
+				CA2222222222222222222222 /* CalibrationModels.swift in Sources */,
+				CA4444444444444444444444 /* CalibrationService.swift in Sources */,
+				CA6666666666666666666666 /* CalibrationView.swift in Sources */,
+				CA8888888888888888888888 /* CalibrationConfigView.swift in Sources */,
 				E257E483271B221720EF42D3 /* BurndownWidgetView.swift in Sources */,
 				5B32A8BD501C9ADF1B07EE2F /* ConfigService.swift in Sources */,
 				37BCE4FAE445377D6425256F /* ContentView.swift in Sources */,

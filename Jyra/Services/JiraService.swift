@@ -333,6 +333,172 @@ actor JiraService {
         return buildBurnUp(issues: issues)
     }
 
+    // MARK: - Board issues (Kanban / Scrum board view)
+
+    func fetchBoardIssues(boardId: Int, pointsField: String?) async throws -> [BoardIssue] {
+        let resolvedField: String
+        if let pf = pointsField, !pf.isEmpty {
+            resolvedField = pf
+        } else if let preferred = try? await fetchPreferredPointsField() {
+            resolvedField = preferred.id
+        } else {
+            resolvedField = "story_points"
+        }
+
+        let fields = "summary,status,assignee,priority,issuetype,labels,created,updated,parent,description,\(resolvedField)"
+        var all: [[String: Any]] = []
+        var startAt = 0
+
+        repeat {
+            let payload = try await getJSON("/rest/agile/1.0/board/\(boardId)/issue", query: [
+                "startAt": "\(startAt)", "maxResults": "100", "fields": fields
+            ])
+            guard let raw = payload["issues"] as? [[String: Any]] else { break }
+            let total = payload["total"] as? Int ?? raw.count
+            all.append(contentsOf: raw)
+            if all.count >= total || raw.isEmpty { break }
+            startAt += raw.count
+        } while true
+
+        return all.compactMap { parseBoardIssue($0, pointsField: resolvedField) }
+    }
+
+    private func parseBoardIssue(_ json: [String: Any], pointsField: String) -> BoardIssue? {
+        guard let id     = json["id"]  as? String,
+              let key    = json["key"] as? String,
+              let fields = json["fields"] as? [String: Any] else { return nil }
+
+        let summary  = fields["summary"] as? String ?? ""
+
+        let statusDict       = fields["status"] as? [String: Any]
+        let statusName       = statusDict?["name"] as? String ?? ""
+        let catDict          = statusDict?["statusCategory"] as? [String: Any]
+        let statusCategoryKey = catDict?["key"] as? String ?? "new"
+
+        let assigneeName  = (fields["assignee"] as? [String: Any])?["displayName"] as? String
+        let priorityName  = (fields["priority"]  as? [String: Any])?["name"] as? String
+        let issueTypeName = (fields["issuetype"] as? [String: Any])?["name"] as? String
+
+        let labels      = fields["labels"] as? [String] ?? []
+        let storyPoints = parsePointValue(fields[pointsField])
+        let created     = parseJiraDate(fields["created"] as? String)
+        let updated     = parseJiraDate(fields["updated"] as? String)
+
+        let parentDict    = fields["parent"] as? [String: Any]
+        let parentKey     = parentDict?["key"] as? String
+        let parentSummary = (parentDict?["fields"] as? [String: Any])?["summary"] as? String
+
+        let description = extractBoardDescription(fields["description"])
+
+        return BoardIssue(
+            id: id, key: key, summary: summary, description: description,
+            statusName: statusName, statusCategoryKey: statusCategoryKey,
+            storyPoints: storyPoints, assigneeName: assigneeName,
+            priorityName: priorityName, issueTypeName: issueTypeName,
+            labels: labels, created: created, updated: updated,
+            parentKey: parentKey, parentSummary: parentSummary
+        )
+    }
+
+    private func extractBoardDescription(_ value: Any?) -> String? {
+        if let str = value as? String { return str.isEmpty ? nil : str }
+        guard let adf     = value as? [String: Any],
+              let content = adf["content"] as? [[String: Any]] else { return nil }
+        let text = adfPlainText(content)
+        return text.isEmpty ? nil : text
+    }
+
+    private func adfPlainText(_ nodes: [[String: Any]]) -> String {
+        var result = ""
+        for node in nodes {
+            if let text = node["text"] as? String { result += text }
+            if let children = node["content"] as? [[String: Any]] { result += adfPlainText(children) }
+            let type = node["type"] as? String ?? ""
+            if ["paragraph", "heading", "bulletList", "orderedList"].contains(type) { result += "\n" }
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Calibration
+
+    func fetchCalibrationSprints(boardId: Int, sprintCount: Int, pointsField: String) async throws -> [CalibrationSprint] {
+        let allSprints = try await fetchSprints(boardId: boardId)
+        let closed = Array(allSprints.filter { $0.state == "closed" }.suffix(sprintCount))
+        let active = Array(allSprints.filter { $0.state == "active" }.prefix(1))
+        let target = closed + active
+
+        var result: [CalibrationSprint] = []
+        for sprint in target {
+            let raw = try await getJSON(
+                "/rest/agile/1.0/board/\(boardId)/sprint/\(sprint.id)/issue",
+                query: [
+                    "expand": "changelog",
+                    "maxResults": "200",
+                    "fields": "summary,status,assignee,\(pointsField)"
+                ]
+            )
+            guard let issues = raw["issues"] as? [[String: Any]] else { continue }
+            let calibIssues = issues.compactMap { parseCalibrationIssue($0, pointsField: pointsField) }
+            result.append(CalibrationSprint(
+                sprintId: sprint.id,
+                sprintName: sprint.name,
+                boardId: boardId,
+                issues: calibIssues
+            ))
+        }
+        return result
+    }
+
+    private func parseCalibrationIssue(_ json: [String: Any], pointsField: String) -> CalibrationIssue? {
+        guard let key    = json["key"]    as? String,
+              let fields = json["fields"] as? [String: Any] else { return nil }
+
+        let assigneeDict = fields["assignee"] as? [String: Any]
+        let accountId    = assigneeDict?["accountId"]   as? String
+        let displayName  = assigneeDict?["displayName"] as? String
+        let points       = parsePointValue(fields[pointsField]) ?? 0
+
+        let statusDict = fields["status"]           as? [String: Any]
+        let catDict    = statusDict?["statusCategory"] as? [String: Any]
+        let isDone     = catDict?["key"] as? String == "done"
+
+        var inProgressAt: Date? = nil
+        var doneAt: Date?       = nil
+
+        if let changelog = json["changelog"] as? [String: Any],
+           let histories = changelog["histories"] as? [[String: Any]] {
+            let sorted = histories.sorted {
+                ($0["created"] as? String ?? "") < ($1["created"] as? String ?? "")
+            }
+            for history in sorted {
+                guard let items   = history["items"]   as? [[String: Any]],
+                      let created = parseJiraDate(history["created"] as? String) else { continue }
+                for item in items {
+                    guard (item["field"] as? String) == "status" else { continue }
+                    let toStr = (item["toString"] as? String ?? "").lowercased()
+                    if inProgressAt == nil && isInProgressStatus(toStr) { inProgressAt = created }
+                    if doneAt       == nil && isDoneStatus(toStr)        { doneAt       = created }
+                }
+            }
+        }
+
+        return CalibrationIssue(
+            key: key, accountId: accountId, displayName: displayName,
+            points: points, isDone: isDone,
+            inProgressAt: inProgressAt, doneAt: doneAt
+        )
+    }
+
+    private func isInProgressStatus(_ name: String) -> Bool {
+        name.contains("progress") || name == "doing" || name == "active"
+        || name.contains("review") || name.contains("dev") || name.contains("test")
+    }
+
+    private func isDoneStatus(_ name: String) -> Bool {
+        name == "done" || name == "closed" || name == "resolved"
+        || name.contains("complete") || name == "released" || name == "accepted"
+    }
+
     func searchIssuePicker(query: String) async throws -> [JiraIssuePickerResponse.Issue] {
         let resp: JiraIssuePickerResponse = try await get("/rest/api/3/issue/picker", query: [
             "query": query,

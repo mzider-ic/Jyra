@@ -2,9 +2,11 @@ import SwiftUI
 
 @main
 struct JyraApp: App {
-    @State private var configService = ConfigService()
-    @State private var metricsStore = MetricsStore()
-    @State private var dataCache = JiraDataCache()
+    @State private var configService       = ConfigService()
+    @State private var metricsStore        = MetricsStore()
+    @State private var dataCache           = JiraDataCache()
+    @State private var boardService        = BoardService()
+    @State private var calibrationService  = CalibrationService()
 
     var body: some Scene {
         WindowGroup {
@@ -12,6 +14,8 @@ struct JyraApp: App {
                 .environment(configService)
                 .environment(metricsStore)
                 .environment(dataCache)
+                .environment(boardService)
+                .environment(calibrationService)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 800)

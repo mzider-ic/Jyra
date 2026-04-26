@@ -1,16 +1,18 @@
 # Jyra
 
-Jyra is a native macOS SwiftUI dashboard for Jira. It connects to a Jira Cloud instance with an API token, lets you build dashboards made up of widgets, and pulls live data from Jira Agile and Jira REST APIs.
+Jyra is a native macOS SwiftUI app for Jira. It connects to a Jira Cloud instance with an API token and gives you two complementary views into your Jira data:
 
-The app is currently focused on three widget types:
+**Dashboards** — build flexible dashboards made up of widgets that visualize team metrics:
 
 - `Velocity`: completed vs committed points across recent sprints, with average velocity, completion rate, and predicted capacity
 - `Burndown`: sprint burndown for the active or selected sprint
 - `Project Burn Rate`: scope-based burn-up projection for selected epics or parent issues
 
+**Boards** — live kanban/scrum board views with neon card UIs, configurable metric highlight rules, and click-to-expand story details
+
 ## How The App Works
 
-At launch, [JyraApp.swift](./Jyra/JyraApp.swift) creates a `ConfigService`, a `MetricsStore`, a `JiraDataCache`, and a `NetworkLogger`, and injects all of them into the SwiftUI environment.
+At launch, [JyraApp.swift](./Jyra/JyraApp.swift) creates a `ConfigService`, a `MetricsStore`, a `JiraDataCache`, a `BoardService`, and a `NetworkLogger`, and injects all of them into the SwiftUI environment.
 
 - If Jira credentials are not configured, [ContentView.swift](./Jyra/ContentView.swift) shows [SetupView.swift](./Jyra/Views/Setup/SetupView.swift).
 - If credentials exist, it shows [DashboardView.swift](./Jyra/Views/Dashboard/DashboardView.swift).
@@ -19,8 +21,8 @@ The basic runtime flow is:
 
 1. User enters Jira URL, email, and API token.
 2. `ConfigService` stores the token in Keychain and the non-secret fields in `UserDefaults`.
-3. `DashboardService` loads dashboards from disk.
-4. Each widget checks `JiraDataCache` before fetching. On a cache miss it calls `JiraService`, stores the result, and publishes metrics to `MetricsStore`.
+3. `DashboardService` loads dashboards from disk; `BoardService` loads boards from disk.
+4. Each widget checks `JiraDataCache` before fetching. On a cache miss it calls `JiraService`, stores the result, and publishes metrics to `MetricsStore`. Board views follow the same cache pattern.
 
 ## Project Structure
 
@@ -29,20 +31,23 @@ The basic runtime flow is:
 - `AppConfig.swift`: Jira connection settings and auth header generation
 - `DashboardModels.swift`: dashboards, widgets, and widget config payloads
 - `JiraModels.swift`: decoded Jira API response shapes and derived chart models
+- `BoardModels.swift`: `Board`, `BoardIssue`, `BoardColumn`, `BoardMetricRule`, `RuleColor`, `BoardRuleField`, `BoardRuleOperator`
 
 `Jyra/Services`
 
 - `ConfigService.swift`: persists Jira credentials
 - `DashboardService.swift`: persists dashboards and widgets
-- `JiraService.swift`: all Jira HTTP calls and widget data shaping; instruments every request through `NetworkLogger`
-- `JiraDataCache.swift`: in-memory response cache with a 5-minute TTL and per-widget force-refresh
+- `BoardService.swift`: persists named boards to `boards.json`; exposes `add`, `update`, `delete`
+- `JiraService.swift`: all Jira HTTP calls and widget/board data shaping; instruments every request through `NetworkLogger`
+- `JiraDataCache.swift`: in-memory response cache with a 5-minute TTL and per-widget/board force-refresh
 - `MetricsStore.swift`: collects widget metrics and aggregates them by widget type for the dashboard summary section
 - `NetworkLogger.swift`: captures every Jira HTTP request and response for the in-app debug panel and Xcode console
 
 `Jyra/Views`
 
 - `Setup/`: first-run Jira connection flow
-- `Dashboard/`: dashboard list, widget containers, add-widget sheet
+- `Dashboard/`: unified sidebar (dashboards + boards), widget containers, add-widget sheet
+- `Boards/`: board kanban view, card view, card detail sheet, and board config sheet
 - `Widgets/`: individual widget views and configuration form
 - `Shared/`: reusable search controls for boards, fields, and issues
 - `NetworkLogView.swift`: the in-app HTTP inspector opened from `Debug → Network Log…`
@@ -67,6 +72,23 @@ The basic runtime flow is:
 
 Each dashboard contains widgets, and each widget stores a typed `WidgetConfig` payload.
 
+### Boards
+
+[BoardService.swift](./Jyra/Services/BoardService.swift) stores boards in:
+
+`~/Library/Application Support/Jyra/boards.json`
+
+Each board stores its name, the linked Jira board ID and name, an optional points field, and an ordered list of `BoardMetricRule` objects. Metric rules are fully `Codable`; `RuleColor` is stored as `r/g/b` Double triplets to avoid bridging issues with SwiftUI `Color`.
+
+## Navigation
+
+The app uses a `NavigationSplitView` with a unified sidebar that has two sections:
+
+- **Dashboards** — lists all saved dashboards; context-menu supports rename and delete; footer button adds a new dashboard
+- **Boards** — lists all saved boards; context-menu supports configure and delete; footer button adds a new board
+
+Selecting a dashboard shows the widget grid. Selecting a board shows the kanban view. Both share the same sidebar list and detail area.
+
 ## Jira Integration
 
 All Jira access goes through [JiraService.swift](./Jyra/Services/JiraService.swift).
@@ -81,6 +103,7 @@ All Jira access goes through [JiraService.swift](./Jyra/Services/JiraService.swi
 - `/rest/agile/1.0/board`
 - `/rest/agile/1.0/board/{id}/sprint`
 - `/rest/agile/1.0/board/{id}/sprint/{id}/issue`
+- `/rest/agile/1.0/board/{id}/issue`
 - `/rest/greenhopper/1.0/rapid/charts/velocity`
 
 ### Velocity Fetching
@@ -193,6 +216,85 @@ Relevant files:
 - [ProjectBurnRateWidgetView.swift](./Jyra/Views/Widgets/ProjectBurnRateWidgetView.swift)
 - [IssueSearchField.swift](./Jyra/Views/Shared/IssueSearchField.swift)
 - [FieldSearchField.swift](./Jyra/Views/Shared/FieldSearchField.swift)
+
+## Boards
+
+Boards are the second major view type in Jyra. Each board is linked to a Jira scrum or kanban board and shows all current issues grouped into three swimlane columns.
+
+### Columns
+
+| Column | Status category |
+|--------|----------------|
+| To Do | `new` |
+| In Progress | `indeterminate` |
+| Done | `done` |
+
+Issues are grouped by their Jira status category key, not by status name, so custom statuses map correctly regardless of how they are named in Jira.
+
+### Card UI
+
+Each card shows:
+
+- Issue key (monospaced, neon cyan)
+- Issue type badge
+- Summary (bold white)
+- Story points badge (neon green, hidden when no points field is set)
+- Assignee initials avatar (neon cyan outline)
+- Priority label
+
+Cards have a dark background with a neon outline. When a metric rule matches, the border color changes to the rule's configured highlight color and a matching glow appears behind the card. Blocked cards always show a red border and a red "BLOCKED" badge — blocked status takes precedence over all metric rules.
+
+### Click to Expand
+
+Clicking any card opens a detail sheet (`BoardCardDetailView`) showing:
+
+- Full summary and issue key with a direct **Open in Jira** link
+- Metadata grid: status, priority, story points, assignee, hours in current status
+- Description (Atlassian Document Format is converted to plain text)
+- Labels (wrapped pill layout)
+- Parent issue key and summary
+- Created and last-updated timestamps
+
+### Metric Rules
+
+Each board has a configurable list of `BoardMetricRule` objects. Rules are evaluated in order; the first matching rule sets the card's highlight color.
+
+**Available fields:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| Hours in Status | numeric | Time since the issue last changed status |
+| Story Points | numeric | Requires a points field to be configured |
+| Priority | string | Matches priority name |
+| Status Name | string | Matches status display name |
+| Issue Type | string | Matches issue type name |
+| Label | string | True if the issue has the given label |
+| Is Blocked | boolean | No value needed; matches `isBlocked` flag |
+
+**Available operators** (vary by field type):
+
+- Numeric: `>`, `<`, `=`, `≠`
+- String: `=`, `≠`, `contains`
+- Boolean: `is true`
+
+**Colors:** seven neon presets — cyan, green, orange, red, purple, yellow, white.
+
+Rules are configured per board in `BoardConfigView`. Each rule can be enabled/disabled with an inline toggle, edited in `RuleEditorView`, or deleted with swipe-to-delete.
+
+### Board Configuration
+
+Open the configuration sheet with the **⋯** button in the board toolbar, or right-click the board in the sidebar and choose **Configure**.
+
+Settings:
+
+- **Board Name**: display name shown in the sidebar and toolbar
+- **Jira Board**: live-search the Jira Agile board list (same `BoardSearchField` used by widgets)
+- **Points Field**: optional; auto-detected if left blank (same logic as burndown widgets)
+- **Highlight Rules**: ordered rule list with add, edit, enable/disable, and delete
+
+### Refresh
+
+The board toolbar has a **↺** refresh button that immediately evicts the board's `JiraDataCache` entry and re-fetches all issues from Jira. The same 5-minute TTL and cache-key scheme used by widgets applies to boards.
 
 ## Widget Layout
 
@@ -375,6 +477,33 @@ Green = 2xx, yellow = 4xx, red = 5xx.
 | 103 | Zero Gap        | 7 closed sprints where sprint 4 has 0 committed and 0 completed points. The velocity widget must filter this sprint out. |
 | 104 | Steady Rhythms  | 5 closed sprints all completing at ~93–95%. Good for confirming a flat, consistent chart. |
 | 201 | No-Dates Team   | Sprints with `null` `startDate` and `endDate`. Velocity widget works normally. Burndown widget shows the expected "missing sprint dates" error, confirming that error path. |
+
+### Mock Board Issues
+
+The mock server includes two boards with issue fixture data for testing the Boards feature. These are distinct from the sprint/velocity boards above; they serve the `/rest/agile/1.0/board/{id}/issue` endpoint.
+
+| Board ID | Name | Issues |
+|----------|------|--------|
+| 101 | Lone Wolf | 9 issues: 3 To Do, 4 In Progress (1 blocked), 2 Done |
+| 102 | Velocity Kings | 11 issues: 3 To Do, 5 In Progress (1 blocked, 1 with "urgent" label), 3 Done |
+
+### Testing The Boards Feature
+
+1. Run the app under the **Jyra (Mock)** scheme.
+2. In the sidebar footer, click **+ New Board**.
+3. Give the board a name, then use the **Jira Board** search to select board **101** (Lone Wolf) or **102** (Velocity Kings). The points field can be left blank.
+4. Save. The board appears in the sidebar under Boards.
+5. Click the board to open the kanban view. Three columns appear with issues distributed by status category.
+6. The blocked issue in each board appears with a red border and BLOCKED badge.
+7. Click any card to open the full detail sheet.
+
+**Testing metric rules:**
+
+1. Open board configuration (⋯ button or right-click → Configure).
+2. Click **Add Rule**.
+3. Set: Field = Hours in Status, Operator = >, Value = 0 (all in-progress cards match since mock data has non-zero hours).
+4. Pick a highlight color and save.
+5. In-progress cards now show the chosen neon border and glow.
 
 ### Testing The Velocity Widget
 
