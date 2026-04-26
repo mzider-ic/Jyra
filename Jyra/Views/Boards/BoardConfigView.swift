@@ -71,8 +71,8 @@ struct BoardConfigView: View {
 
                     Button {
                         let newRule = BoardMetricRule(
-                            field: .hoursInStatus, op: .greaterThan,
-                            value: "24", color: .neonOrange
+                            conditions: [RuleCondition(field: .hoursInStatus, op: .greaterThan, value: "24")],
+                            color: .neonOrange
                         )
                         draft.metricRules.append(newRule)
                         editingRule = newRule
@@ -111,7 +111,7 @@ struct BoardConfigView: View {
                 }
             }
         }
-        .frame(width: 480, height: 580)
+        .frame(width: 560, height: 620)
         .onAppear {
             if !draft.jiraBoardName.isEmpty {
                 selectedJiraBoard = JiraBoard(id: draft.jiraBoardId, name: draft.jiraBoardName, type: "scrum")
@@ -168,11 +168,19 @@ struct BoardConfigView: View {
     }
 
     private func ruleDescription(_ rule: BoardMetricRule) -> String {
-        if rule.field == .isBlocked { return "Is Blocked" }
-        let field = rule.field.displayName
-        let op    = rule.op.displayName
-        let val   = rule.value
-        return "\(field) \(op) \(val)"
+        guard !rule.conditions.isEmpty else { return "(no conditions)" }
+        let parts: [String] = rule.conditions.prefix(2).map { cond in
+            let prefix = cond.negated ? "NOT " : ""
+            if cond.field == .isBlocked { return "\(prefix)Is Blocked" }
+            if cond.field == .statusCategory {
+                let disp = BoardRuleField.statusCategoryOptions.first { $0.key == cond.value }?.display ?? cond.value
+                return "\(prefix)Status \(cond.op.displayName) \(disp)"
+            }
+            let unit = cond.field.isTimeBased ? " \(cond.timeUnit.displayName)" : ""
+            return "\(prefix)\(cond.field.displayName) \(cond.op.displayName) \(cond.value)\(unit)"
+        }
+        let suffix = rule.conditions.count > 2 ? " \(rule.connector.rawValue) …" : ""
+        return parts.joined(separator: " \(rule.connector.rawValue) ") + suffix
     }
 }
 
@@ -190,82 +198,219 @@ struct RuleEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Label") {
-                    TextField("Rule name (optional)", text: $draft.name)
+                Section("Label (optional)") {
+                    TextField("Rule name", text: $draft.name)
                 }
 
-                Section("Condition") {
-                    Picker("Field", selection: $draft.field) {
-                        ForEach(BoardRuleField.allCases, id: \.self) { field in
-                            Text(field.displayName).tag(field)
-                        }
-                    }
-                    .onChange(of: draft.field) { _, newField in
-                        if !newField.compatibleOperators.contains(draft.op) {
-                            draft.op = newField.compatibleOperators.first ?? .equals
+                Section {
+                    // Connector picker shown when there are multiple conditions
+                    if draft.conditions.count > 1 {
+                        Picker("Match", selection: $draft.connector) {
+                            Text("ALL conditions (AND)").tag(RuleConnector.and)
+                            Text("ANY condition (OR)").tag(RuleConnector.or)
                         }
                     }
 
-                    if !draft.field.isBoolean {
-                        Picker("Operator", selection: $draft.op) {
-                            ForEach(draft.field.compatibleOperators, id: \.self) { op in
-                                Text(op.displayName).tag(op)
-                            }
-                        }
-
-                        TextField(draft.field.isNumeric ? "Number" : "Value", text: $draft.value)
+                    ForEach(draft.conditions.indices, id: \.self) { idx in
+                        conditionRow(idx: idx)
                     }
+
+                    Button {
+                        draft.conditions.append(
+                            RuleCondition(field: .statusCategory, op: .equals, value: "indeterminate")
+                        )
+                    } label: {
+                        Label("Add Condition", systemImage: "plus.circle")
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(RuleColor.neonCyan.swiftUI)
+                } header: {
+                    Text("Conditions")
+                } footer: {
+                    Text("Conditions are combined with \(draft.connector.rawValue). Use NOT to invert a condition.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Highlight Color") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 12) {
                         ForEach(RuleColor.presets.indices, id: \.self) { i in
-                            let preset = RuleColor.presets[i]
-                            colorSwatch(preset)
+                            colorSwatch(RuleColor.presets[i])
                         }
                     }
                     .padding(.vertical, 4)
                 }
 
                 Section("Preview") {
-                    HStack(spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
                         Circle()
                             .fill(draft.color.swiftUI)
-                            .frame(width: 16, height: 16)
+                            .frame(width: 14, height: 14)
                             .shadow(color: draft.color.swiftUI.opacity(0.6), radius: 5)
+                            .padding(.top, 2)
                         Text(previewText)
-                            .font(.system(size: 13))
+                            .font(.system(size: 12))
                             .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .navigationTitle("Edit Rule")
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onSave(draft) }   // closes without discarding — caller can diff
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { onSave(draft) }
+                        .disabled(draft.conditions.isEmpty)
                 }
             }
         }
-        .frame(width: 400, height: 460)
+        .frame(width: 520, height: 560)
     }
+
+    // MARK: - Condition row
+
+    @ViewBuilder
+    private func conditionRow(idx: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                // NOT toggle
+                Button {
+                    draft.conditions[idx].negated.toggle()
+                } label: {
+                    Text("NOT")
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            draft.conditions[idx].negated
+                                ? Color.orange.opacity(0.25)
+                                : Color.clear
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(draft.conditions[idx].negated ? Color.orange : Color.secondary)
+
+                // Field picker
+                Picker("", selection: $draft.conditions[idx].field) {
+                    ForEach(BoardRuleField.allCases, id: \.self) { field in
+                        Text(field.displayName).tag(field)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                .onChange(of: draft.conditions[idx].field) { _, newField in
+                    if !newField.compatibleOperators.contains(draft.conditions[idx].op) {
+                        draft.conditions[idx].op = newField.compatibleOperators.first ?? .equals
+                    }
+                    if newField == .statusCategory {
+                        draft.conditions[idx].value = "indeterminate"
+                    } else if draft.conditions[idx].value.isEmpty || newField.isBoolean {
+                        draft.conditions[idx].value = ""
+                    }
+                }
+
+                // Operator (hidden for boolean fields)
+                if !draft.conditions[idx].field.isBoolean {
+                    Picker("", selection: $draft.conditions[idx].op) {
+                        ForEach(draft.conditions[idx].field.compatibleOperators, id: \.self) { op in
+                            Text(op.displayName).tag(op)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 70)
+
+                    // Value
+                    if draft.conditions[idx].field == .statusCategory {
+                        Picker("", selection: $draft.conditions[idx].value) {
+                            ForEach(BoardRuleField.statusCategoryOptions, id: \.key) { opt in
+                                Text(opt.display).tag(opt.key)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 120)
+                    } else {
+                        TextField(draft.conditions[idx].field.isNumeric ? "0" : "value",
+                                  text: $draft.conditions[idx].value)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 72)
+                    }
+
+                    // Time unit (hours / days / weeks)
+                    if draft.conditions[idx].field.isTimeBased {
+                        Picker("", selection: $draft.conditions[idx].timeUnit) {
+                            ForEach(RuleTimeUnit.allCases, id: \.self) { unit in
+                                Text(unit.displayName).tag(unit)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 80)
+                    }
+                }
+
+                Spacer()
+
+                // Delete button (only when more than one condition)
+                if draft.conditions.count > 1 {
+                    Button {
+                        draft.conditions.remove(at: idx)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .foregroundStyle(Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Connector label between conditions (except after last)
+            if idx < draft.conditions.count - 1 {
+                Text(draft.connector.rawValue)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(RuleColor.neonCyan.swiftUI.opacity(0.7))
+                    .padding(.leading, 2)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    // MARK: - Color swatch
 
     private func colorSwatch(_ color: RuleColor) -> some View {
         let isSelected = draft.color == color
         return Circle()
             .fill(color.swiftUI)
             .frame(width: 28, height: 28)
-            .overlay(
-                Circle().stroke(isSelected ? Color.white : Color.clear, lineWidth: 2)
-            )
+            .overlay(Circle().stroke(isSelected ? Color.white : Color.clear, lineWidth: 2))
             .shadow(color: color.swiftUI.opacity(isSelected ? 0.7 : 0.3), radius: isSelected ? 6 : 2)
             .onTapGesture { draft.color = color }
     }
 
+    // MARK: - Preview text
+
     private var previewText: String {
-        if draft.field == .isBlocked { return "Cards that are blocked" }
-        let field = draft.field.displayName
-        let op    = draft.op.displayName
-        let val   = draft.value.isEmpty ? "…" : draft.value
-        return "Cards where \(field) \(op) \(val)"
+        guard !draft.conditions.isEmpty else { return "No conditions defined" }
+        let parts: [String] = draft.conditions.map { cond in
+            let prefix = cond.negated ? "NOT " : ""
+            switch cond.field {
+            case .isBlocked:
+                return "\(prefix)Is Blocked"
+            case .statusCategory:
+                let disp = BoardRuleField.statusCategoryOptions.first { $0.key == cond.value }?.display ?? cond.value
+                return "\(prefix)Status Category \(cond.op.displayName) \(disp)"
+            default:
+                let unit = cond.field.isTimeBased ? " \(cond.timeUnit.displayName)" : ""
+                let val  = cond.value.isEmpty ? "…" : "\(cond.value)\(unit)"
+                return "\(prefix)\(cond.field.displayName) \(cond.op.displayName) \(val)"
+            }
+        }
+        let joined = parts.joined(separator: " \(draft.connector.rawValue) ")
+        return "Cards where \(joined)"
     }
 }
