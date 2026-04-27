@@ -898,38 +898,23 @@ actor JiraService {
     }
 
     private func decodeWithDynamicPoints<T: Decodable>(data: Data, pointsField: String) throws -> T {
-        guard var json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              var issues = json["issues"] as? [[String: Any]] else {
+        //11 Only SprintIssuesResponse needs dynamic story points patching.
+        // If another Decodable type calls through here, decode it normally.
+        if T.self != SprintIssuesResponse.self {
             return try JSONDecoder.jira.decode(T.self, from: data)
         }
-
-        for i in issues.indices {
-            if var fields = issues[i]["fields"] as? [String: Any] {
-                if let pts = parsePointValue(fields[pointsField]) {
-                    fields["storyPoints_decoded"] = pts
-                }
-                issues[i]["fields"] = fields
-            }
-        }
-        json["issues"] = issues
-
-        _ = try JSONSerialization.data(withJSONObject: json)
-
-        // Inject storyPoints via a custom decoder
+        // Decode normally first.
         let decoder = JSONDecoder.jira
         var result = try decoder.decode(SprintIssuesResponse.self, from: data)
-
-        // Re-patch story points from original JSON
-        for i in result.issues.indices {
-            if let issueJson = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["issues"] as? [[String: Any]],
-               i < issueJson.count,
-               let fields = issueJson[i]["fields"] as? [String: Any] {
-                if let pts = parsePointValue(fields[pointsField]) {
-                    result.issues[i].fields.storyPoints = pts
+        // Patch storyPoints from raw JSON using parsePointValue (supports numeric + option objects + arrays
+        if let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let issueJson = root["issues"] as? [[String: Any]] {
+            for i in result.issues.indices where i < issueJson.count {
+                if let fields = issueJson[i]["fields"] as? [String: Any] {
+                    result.issues[i].fields.storyPoints = parsePointValue(fields[pointsField])
                 }
             }
         }
-
         return result as! T
     }
 
