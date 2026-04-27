@@ -339,11 +339,11 @@ actor JiraService {
         return buildBurnUp(issues: issues)
     }
 
-    // MARK: - Board issues (Kanban / Scrum board view)
+    // MARK: - Board issues (Kanban / Scrum board view — active sprint only)
 
     func fetchBoardIssues(boardId: Int, pointsField: String?) async throws -> [BoardIssue] {
         let resolvedField: String
-        if let pf = pointsField, !pf.isEmpty {
+        if let pf = pointsField, !pf.isEmpty, pf != "story_points" {
             resolvedField = pf
         } else if let preferred = try? await fetchPreferredPointsField() {
             resolvedField = preferred.id
@@ -351,12 +351,21 @@ actor JiraService {
             resolvedField = "story_points"
         }
 
+        // Scope to the active sprint so the board shows only current-sprint cards.
+        // Fall back to the full board endpoint when no active sprint exists.
+        let path: String
+        if let activeSprint = try? await fetchActiveSprint(boardId: boardId) {
+            path = "/rest/agile/1.0/board/\(boardId)/sprint/\(activeSprint.id)/issue"
+        } else {
+            path = "/rest/agile/1.0/board/\(boardId)/issue"
+        }
+
         let fields = "summary,status,assignee,priority,issuetype,labels,created,updated,parent,description,\(resolvedField)"
         var all: [[String: Any]] = []
         var startAt = 0
 
         repeat {
-            let payload = try await getJSON("/rest/agile/1.0/board/\(boardId)/issue", query: [
+            let payload = try await getJSON(path, query: [
                 "startAt": "\(startAt)", "maxResults": "100", "fields": fields
             ])
             guard let raw = payload["issues"] as? [[String: Any]] else { break }
@@ -925,13 +934,29 @@ actor JiraService {
     }
 
     private func parsePointValue(_ value: Any?) -> Double? {
+        guard let value else { return nil }
+        if value is NSNull { return nil }
+        
         if let value = value as? Double { return value }
         if let value = value as? Int { return Double(value) }
         if let value = value as? NSNumber { return value.doubleValue }
         if let value = value as? String { return Double(value) }
+        
+        if let dict = value as? [String: Any] {
+            if let v = parsePointValue(dict["value"]) { return v }
+            if let v = parsePointValue(dict["name"]) { return v }
+            if let v = parsePointValue(dict["label"]) { return v }
+            return nil
+        }
+        
+        if let arr = value as? [Any] {
+            for item in arr {
+                if let v = parsePointValue(item) { return v }
+            }
+            return nil
+        }
         return nil
     }
-
 }
 
 extension JSONDecoder {

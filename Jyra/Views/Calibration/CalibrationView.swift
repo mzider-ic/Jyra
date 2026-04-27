@@ -153,7 +153,9 @@ struct CalibrationView: View {
                         .padding(32)
                 } else {
                     ForEach(filteredSorted) { metrics in
-                        EngineerMetricsCard(metrics: metrics)
+                        EngineerMetricsCard(metrics: metrics) {
+                            removeEngineer(accountId: metrics.accountId)
+                        }
                     }
                 }
             }
@@ -195,6 +197,16 @@ struct CalibrationView: View {
                 .foregroundStyle(RuleColor.neonCyan.swiftUI)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Roster removal
+
+    private func removeEngineer(accountId: String) {
+        allMetrics.removeAll     { $0.accountId == accountId }
+        gradeSummaries = normalizeByGrade(allMetrics)
+        var updated = calibration
+        updated.engineers.removeAll { $0.jiraAccountId == accountId }
+        calibrationService.update(updated)
     }
 
     // MARK: - Load
@@ -240,6 +252,7 @@ struct CalibrationView: View {
 
 private struct EngineerMetricsCard: View {
     let metrics: EngineerMetrics
+    var onRemove: () -> Void = {}
 
     private var workloadColor: Color {
         switch metrics.relativeWorkload {
@@ -293,7 +306,8 @@ private struct EngineerMetricsCard: View {
 
             // Metric cells
             HStack(spacing: 8) {
-                metricCell("Completed", value: String(format: "%.0f pts", metrics.completedPoints))
+                metricCell("Avg Pts/Sprint", value: String(format: "%.1f pts", metrics.avgPointsPerSprint))
+                metricCell("Total Completed", value: String(format: "%.0f pts", metrics.completedPoints))
                 metricCell("Team Committed", value: String(format: "%.0f pts", metrics.teamCommittedPoints))
                 metricCell("Stories Done", value: "\(metrics.completedIssueCount)")
                 metricCell("Avg Cycle", value: metrics.cycleTimeFormatted)
@@ -306,6 +320,11 @@ private struct EngineerMetricsCard: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(metrics.gradeLevel.neonColor.opacity(0.15), lineWidth: 1)
         )
+        .contextMenu {
+            Button(role: .destructive) { onRemove() } label: {
+                Label("Remove from Roster", systemImage: "person.fill.xmark")
+            }
+        }
     }
 
     private var gradeBadge: some View {
@@ -420,7 +439,8 @@ private struct RankingRow: View {
 
             // Secondary metrics
             HStack(spacing: 16) {
-                labeledValue("pts", value: String(format: "%.0f", metrics.completedPoints))
+                labeledValue("avg pts", value: String(format: "%.1f", metrics.avgPointsPerSprint))
+                labeledValue("total", value: String(format: "%.0f", metrics.completedPoints))
                 labeledValue("cycle", value: metrics.cycleTimeFormatted)
             }
         }

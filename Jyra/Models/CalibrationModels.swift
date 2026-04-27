@@ -107,6 +107,11 @@ struct EngineerMetrics: Identifiable {
         String(format: "%.1f%%", relativeWorkload * 100)
     }
 
+    var avgPointsPerSprint: Double {
+        guard sprintsAnalyzed > 0 else { return 0 }
+        return completedPoints / Double(sprintsAnalyzed)
+    }
+
     var cycleTimeFormatted: String {
         guard let d = avgCycleTimeDays else { return "—" }
         return d < 1 ? String(format: "%.0fh", d * 24) : String(format: "%.1f d", d)
