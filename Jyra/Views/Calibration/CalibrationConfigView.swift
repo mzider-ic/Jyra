@@ -9,8 +9,8 @@ struct CalibrationConfigView: View {
 
     @State private var draft: CalibrationConfig
     @State private var availableFields: [JiraField] = []
-    @State private var isAddingBoard   = false
-    @State private var isDiscovering   = false
+    @State private var isAddingBoard = false
+    @State private var isDiscovering = false
     @State private var discoverError: String? = nil
 
     init(calibration: CalibrationConfig, onDismiss: @escaping (CalibrationConfig?) -> Void) {
@@ -24,121 +24,175 @@ struct CalibrationConfigView: View {
         !draft.name.trimmingCharacters(in: .whitespaces).isEmpty && !draft.boards.isEmpty
     }
 
+    private var screenSize: CGSize {
+        let f = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        return CGSize(width: f.width, height: f.height)
+    }
+
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Name") {
-                    TextField("Calibration name", text: $draft.name)
-                }
+        let W = screenSize.width  * 0.6
+        let H = screenSize.height * 0.78
 
-                Section {
-                    ForEach(draft.boards.indices, id: \.self) { i in
-                        HStack {
-                            Image(systemName: "square.grid.3x1.below.line.grid.1x2")
-                                .foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(draft.boards[i].boardName)
-                                    .font(.system(size: 13))
-                                Text(draft.boards[i].pointsFieldName.isEmpty
-                                     ? "Auto-detect points field"
-                                     : draft.boards[i].pointsFieldName)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .onDelete { offsets in draft.boards.remove(atOffsets: offsets) }
-
-                    Button {
-                        isAddingBoard = true
-                    } label: {
-                        Label("Add Board", systemImage: "plus")
-                    }
-                } header: {
-                    Text("Boards")
-                } footer: {
-                    Text("Add the Jira boards whose sprint data will be analyzed. Engineers are discovered per board.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Sprint Window") {
-                    Stepper(
-                        "Analyze last \(draft.sprintCount) sprint\(draft.sprintCount == 1 ? "" : "s")",
-                        value: $draft.sprintCount,
-                        in: 1...10
-                    )
-                    Text("Includes up to \(draft.sprintCount) closed sprints plus any active sprint.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section {
-                    if draft.engineers.isEmpty {
-                        Text("No engineers configured yet. Use \"Discover\" to find assignees from recent sprint data.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, 4)
-                    } else {
-                        ForEach(draft.engineers) { eng in
-                            engineerRow(eng)
-                        }
-                        .onDelete { offsets in draft.engineers.remove(atOffsets: offsets) }
-                    }
-
-                    Button {
-                        Task { await discoverEngineers() }
-                    } label: {
-                        if isDiscovering {
-                            HStack(spacing: 8) {
-                                ProgressView().scaleEffect(0.7)
-                                Text("Discovering from sprint data…")
-                            }
-                        } else {
-                            Label("Discover Engineers", systemImage: "person.badge.magnifyingglass")
-                        }
-                    }
-                    .disabled(draft.boards.isEmpty || isDiscovering)
-
-                    if let err = discoverError {
-                        Text(err).font(.caption).foregroundStyle(RuleColor.neonRed.swiftUI)
-                    }
-                } header: {
-                    Text("Engineers")
-                } footer: {
-                    Text("Discover automatically finds all Jira assignees from recent sprint data. Assign grade levels to enable cross-team normalization.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        VStack(spacing: 0) {
+            // Title bar
+            HStack {
+                Button("Cancel") { onDismiss(nil) }
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Text(isNew ? "New Calibration" : "Edit Calibration")
+                    .font(.headline)
+                Spacer()
+                Button("Save") { onDismiss(draft) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canSave)
+                    .keyboardShortcut(.defaultAction)
             }
-            .navigationTitle(isNew ? "New Calibration" : "Edit Calibration")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onDismiss(nil) }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    nameSection
+                    boardsSection
+                    sprintSection
+                    engineersSection
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { onDismiss(draft) }
-                        .disabled(!canSave)
-                }
-            }
-            .sheet(isPresented: $isAddingBoard) {
-                CalibrationAddBoardSheet(availableFields: availableFields) { ref in
-                    if !draft.boards.contains(where: { $0.boardId == ref.boardId }) {
-                        draft.boards.append(ref)
-                    }
-                    isAddingBoard = false
-                } onCancel: {
-                    isAddingBoard = false
-                }
-                .environment(configService)
+                .padding(20)
             }
         }
-        .adaptiveModal(widthFraction: 0.55)
+        .frame(width: W, height: H)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $isAddingBoard) {
+            CalibrationAddBoardSheet(availableFields: availableFields) { ref in
+                if !draft.boards.contains(where: { $0.boardId == ref.boardId }) {
+                    draft.boards.append(ref)
+                }
+                isAddingBoard = false
+            } onCancel: {
+                isAddingBoard = false
+            }
+            .environment(configService)
+        }
         .task {
             guard let cfg = configService.config else { return }
             availableFields = (try? await JiraService(config: cfg).fetchFields()) ?? []
         }
     }
+
+    // MARK: - Sections
+
+    private var nameSection: some View {
+        configSection("Name") {
+            TextField("Calibration name", text: $draft.name)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var boardsSection: some View {
+        configSection(
+            "Boards",
+            footer: "Add the Jira boards whose sprint data will be analyzed."
+        ) {
+            if draft.boards.isEmpty {
+                Text("No boards added yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(draft.boards.indices, id: \.self) { i in
+                    HStack(spacing: 10) {
+                        Image(systemName: "square.grid.3x1.below.line.grid.1x2")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(draft.boards[i].boardName)
+                                .font(.system(size: 13))
+                            Text(draft.boards[i].pointsFieldName.isEmpty
+                                 ? "Auto-detect points field"
+                                 : draft.boards[i].pointsFieldName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            draft.boards.remove(at: i)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 2)
+                    if i < draft.boards.count - 1 { Divider() }
+                }
+            }
+
+            Button {
+                isAddingBoard = true
+            } label: {
+                Label("Add Board", systemImage: "plus")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .padding(.top, draft.boards.isEmpty ? 0 : 4)
+        }
+    }
+
+    private var sprintSection: some View {
+        configSection("Sprint Window") {
+            Stepper(
+                "Analyze last \(draft.sprintCount) sprint\(draft.sprintCount == 1 ? "" : "s")",
+                value: $draft.sprintCount,
+                in: 1...10
+            )
+            Text("Includes up to \(draft.sprintCount) closed sprints plus any active sprint.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var engineersSection: some View {
+        configSection(
+            "Engineers",
+            footer: "Discover automatically finds all Jira assignees from recent sprint data. Assign grade levels to enable cross-team normalization."
+        ) {
+            if draft.engineers.isEmpty {
+                Text("No engineers configured yet. Use \"Discover\" to find assignees from recent sprint data.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(draft.engineers) { eng in
+                    engineerRow(eng)
+                    if eng.id != draft.engineers.last?.id { Divider() }
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    Task { await discoverEngineers() }
+                } label: {
+                    if isDiscovering {
+                        HStack(spacing: 6) {
+                            ProgressView().scaleEffect(0.7)
+                            Text("Discovering…")
+                        }
+                    } else {
+                        Label("Discover Engineers", systemImage: "person.badge.magnifyingglass")
+                    }
+                }
+                .buttonStyle(.borderless)
+                .disabled(draft.boards.isEmpty || isDiscovering)
+                .padding(.top, 4)
+
+                if let err = discoverError {
+                    Text(err).font(.caption).foregroundStyle(RuleColor.neonRed.swiftUI)
+                }
+            }
+        }
+    }
+
+    // MARK: - Engineer row
 
     private func engineerRow(_ eng: EngineerAssignment) -> some View {
         HStack(spacing: 10) {
@@ -153,7 +207,25 @@ struct CalibrationConfigView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(eng.displayName).font(.system(size: 13))
-                Text(eng.jiraAccountId).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                Text(eng.jiraAccountId)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: "square.and.arrow.up.on.square")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                    TextField("GitLab @username", text: Binding(
+                        get: { eng.gitlabUsername },
+                        set: { val in
+                            if let idx = draft.engineers.firstIndex(where: { $0.id == eng.id }) {
+                                draft.engineers[idx].gitlabUsername = val
+                            }
+                        }
+                    ))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .textFieldStyle(.plain)
+                }
             }
 
             Spacer()
@@ -170,10 +242,20 @@ struct CalibrationConfigView: View {
                     Text(grade.rawValue).tag(grade)
                 }
             }
-            .frame(width: 170)
+            .frame(width: 180)
+
+            Button {
+                draft.engineers.removeAll { $0.id == eng.id }
+            } label: {
+                Image(systemName: "minus.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 2)
     }
+
+    // MARK: - Discover
 
     private func discoverEngineers() async {
         guard let cfg = configService.config else { return }
@@ -219,6 +301,39 @@ struct CalibrationConfigView: View {
             discoverError = error.localizedDescription
         }
     }
+
+    // MARK: - Section helper
+
+    @ViewBuilder
+    private func configSection<Content: View>(
+        _ title: String,
+        footer: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .tracking(0.5)
+                .padding(.horizontal, 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.15)))
+
+            if let footer {
+                Text(footer)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
+            }
+        }
+    }
 }
 
 // MARK: - Add board sheet
@@ -232,46 +347,88 @@ private struct CalibrationAddBoardSheet: View {
     @State private var selectedBoard: JiraBoard? = nil
     @State private var selectedField: JiraField? = nil
 
+    private var screenSize: CGSize {
+        let f = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        return CGSize(width: f.width, height: f.height)
+    }
+
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Board") {
-                    BoardSearchField(selectedBoard: $selectedBoard, label: "Jira Board")
+        let W = screenSize.width  * 0.4
+        let H = screenSize.height * 0.42
+
+        VStack(spacing: 0) {
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Text("Add Board")
+                    .font(.headline)
+                Spacer()
+                Button("Add") {
+                    guard let board = selectedBoard else { return }
+                    onAdd(CalibrationBoardRef(
+                        boardId: board.id,
+                        boardName: board.name,
+                        pointsField: selectedField?.id ?? "",
+                        pointsFieldName: selectedField?.name ?? ""
+                    ))
                 }
-                Section("Points Field") {
-                    FieldSearchField(
-                        selectedField: $selectedField,
-                        fields: availableFields.filter {
-                            $0.schema?.type == "number"
-                            || $0.name.localizedCaseInsensitiveContains("point")
-                        }
-                    )
-                    if selectedField == nil {
-                        Text("Auto-detected if left blank")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedBoard == nil)
+                .keyboardShortcut(.defaultAction)
             }
-            .navigationTitle("Add Board")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        guard let board = selectedBoard else { return }
-                        onAdd(CalibrationBoardRef(
-                            boardId: board.id,
-                            boardName: board.name,
-                            pointsField: selectedField?.id ?? "",
-                            pointsFieldName: selectedField?.name ?? ""
-                        ))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    sheetSection("Board") {
+                        BoardSearchField(selectedBoard: $selectedBoard, label: "Jira Board")
                     }
-                    .disabled(selectedBoard == nil)
+                    sheetSection("Points Field") {
+                        FieldSearchField(
+                            selectedField: $selectedField,
+                            fields: availableFields.filter {
+                                $0.schema?.type == "number"
+                                || $0.name.localizedCaseInsensitiveContains("point")
+                            }
+                        )
+                        if selectedField == nil {
+                            Text("Auto-detected if left blank")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
+                .padding(20)
             }
         }
-        .adaptiveModal(widthFraction: 0.35, heightFraction: 0.45, minWidth: 360, minHeight: 220)
+        .frame(width: W, height: H)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    @ViewBuilder
+    private func sheetSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .tracking(0.5)
+                .padding(.horizontal, 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.15)))
+        }
     }
 }

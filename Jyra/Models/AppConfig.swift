@@ -7,6 +7,7 @@ struct AppConfig: Codable, Equatable {
     var email: String
     var apiKey: String
     var velocityPalette: VelocityPalette = .default
+    var gitlabToken: String = ""
 
     var authHeader: String {
         let raw = "\(email):\(apiKey)"

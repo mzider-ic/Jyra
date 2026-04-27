@@ -34,6 +34,18 @@ enum GradeLevel: String, Codable, CaseIterable, Hashable {
     }
 }
 
+// MARK: - GitLab activity
+
+struct GitLabActivity {
+    var commits: Int  = 0
+    var comments: Int = 0
+    var mrOpened: Int = 0
+    var mrReviewed: Int = 0
+    var mrMerged: Int = 0
+
+    var totalEvents: Int { commits + comments + mrOpened + mrReviewed + mrMerged }
+}
+
 // MARK: - Persisted config
 
 struct EngineerAssignment: Identifiable, Codable, Hashable {
@@ -41,6 +53,7 @@ struct EngineerAssignment: Identifiable, Codable, Hashable {
     var jiraAccountId: String
     var displayName: String
     var gradeLevel: GradeLevel
+    var gitlabUsername: String = ""
 }
 
 struct CalibrationBoardRef: Codable, Equatable {
@@ -87,6 +100,7 @@ struct EngineerMetrics: Identifiable {
     var id: String { "\(accountId)-\(boardId)" }
     var accountId: String
     var displayName: String
+    var gitlabUsername: String
     var gradeLevel: GradeLevel
     var boardId: Int
     var boardName: String
@@ -96,7 +110,8 @@ struct EngineerMetrics: Identifiable {
     var sprintsAnalyzed: Int
     var avgCycleTimeDays: Double?
     var gradeRank: Int = 0
-    var gradePercentile: Double = 0   // 0–1; higher = more workload than peers
+    var gradePercentile: Double = 0
+    var gitLabActivity: GitLabActivity? = nil
 
     var relativeWorkload: Double {
         guard teamCommittedPoints > 0 else { return 0 }
@@ -121,7 +136,7 @@ struct EngineerMetrics: Identifiable {
 struct GradeLevelSummary: Identifiable {
     var id: String { gradeLevel.rawValue }
     var gradeLevel: GradeLevel
-    var engineers: [EngineerMetrics]  // sorted desc by relativeWorkload; gradeRank set
+    var engineers: [EngineerMetrics]
 
     var avgRelativeWorkload: Double {
         guard !engineers.isEmpty else { return 0 }
@@ -162,12 +177,14 @@ func computeEngineerMetrics(
 
     return allIds.map { aid in
         let assignment = assignmentMap[aid]
-        let name  = assignment?.displayName ?? nameByAcct[aid] ?? aid
-        let grade = assignment?.gradeLevel ?? .engineer
-        let times = cycleTimes[aid] ?? []
+        let name      = assignment?.displayName ?? nameByAcct[aid] ?? aid
+        let grade     = assignment?.gradeLevel ?? .engineer
+        let glUser    = assignment?.gitlabUsername ?? ""
+        let times     = cycleTimes[aid] ?? []
         return EngineerMetrics(
             accountId: aid,
             displayName: name,
+            gitlabUsername: glUser,
             gradeLevel: grade,
             boardId: boardRef.boardId,
             boardName: boardRef.boardName,

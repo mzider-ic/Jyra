@@ -42,6 +42,7 @@
 		CA4444444444444444444444 /* CalibrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3333333333333333333333 /* CalibrationService.swift */; };
 		CA6666666666666666666666 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5555555555555555555555 /* CalibrationView.swift */; };
 		CA8888888888888888888888 /* CalibrationConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7777777777777777777777 /* CalibrationConfigView.swift */; };
+		GL1111111111111111111111 /* GitLabService.swift in Sources */ = {isa = PBXBuildFile; fileRef = GL2222222222222222222222 /* GitLabService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -83,6 +84,7 @@
 		CA3333333333333333333333 /* CalibrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationService.swift; sourceTree = "<group>"; };
 		CA5555555555555555555555 /* CalibrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationView.swift; sourceTree = "<group>"; };
 		CA7777777777777777777777 /* CalibrationConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationConfigView.swift; sourceTree = "<group>"; };
+		GL2222222222222222222222 /* GitLabService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitLabService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +144,7 @@
 				A7A486C11E57C99E68EBFC63 /* ConfigService.swift */,
 				7FC90C470D99D483E7FFC310 /* DashboardService.swift */,
 				4A2E9F485FF74D8CA3842190 /* JiraDataCache.swift */,
+				GL2222222222222222222222 /* GitLabService.swift */,
 				10250A20A651EEF24A547028 /* JiraService.swift */,
 				AABC1234567890ABCDEF1234 /* MetricsStore.swift */,
 				C0742A586B054C0AB9EBCA7F /* NetworkLogger.swift */,
@@ -320,6 +323,7 @@
 				B650C1F01111111111111111 /* IssueSearchField.swift in Sources */,
 				90F92D70CAEF7B4F601A800A /* JiraModels.swift in Sources */,
 				A85D38B026EE4B788535768C /* JiraDataCache.swift in Sources */,
+				GL1111111111111111111111 /* GitLabService.swift in Sources */,
 				64244527F131FE5C2414553E /* JiraService.swift in Sources */,
 				88D68503393F46C5ACD0DE8C /* NetworkLogger.swift in Sources */,
 				D5037E5D21134A519B9DE537 /* NetworkLogView.swift in Sources */,

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct CalibrationView: View {
     let calibration: CalibrationConfig
@@ -91,6 +92,12 @@ struct CalibrationView: View {
             }
             Spacer()
             if isLoading { ProgressView().scaleEffect(0.7) }
+            Button { exportCSV() } label: {
+                Image(systemName: "square.and.arrow.up").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Export to CSV")
+            .disabled(allMetrics.isEmpty)
             Button { refreshToken += 1 } label: {
                 Image(systemName: "arrow.clockwise").foregroundStyle(RuleColor.neonCyan.swiftUI)
             }
@@ -240,11 +247,75 @@ struct CalibrationView: View {
                 let m = computeEngineerMetrics(sprints: sprints, boardRef: boardRef, assignments: calibration.engineers)
                 collected.append(contentsOf: m)
             }
+
+            // Fetch GitLab activity if a token is configured
+            if !cfg.gitlabToken.isEmpty {
+                let glSvc = GitLabService(token: cfg.gitlabToken)
+                let since = Date().addingTimeInterval(-Double(calibration.sprintCount) * 14 * 86_400 - 7 * 86_400)
+                for i in collected.indices {
+                    let username = collected[i].gitlabUsername
+                    guard !username.isEmpty else { continue }
+                    if let userId = try? await glSvc.resolveUserId(username: username) {
+                        collected[i].gitLabActivity = try? await glSvc.fetchActivity(userId: userId, since: since)
+                    }
+                }
+            }
+
             allMetrics     = collected
             gradeSummaries = normalizeByGrade(collected)
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    // MARK: - CSV Export
+
+    private func exportCSV() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(calibration.name) Calibration.csv"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let hasGL = filteredSorted.contains { $0.gitLabActivity != nil }
+        var headers = ["Name", "GitLab Username", "Grade", "Board",
+                       "Avg Pts/Sprint", "Completed Pts", "Team Committed Pts",
+                       "Relative Workload %", "Stories Done", "Avg Cycle Time (days)",
+                       "Sprints Analyzed", "Grade Rank"]
+        if hasGL { headers += ["GL Commits", "GL Comments", "GL MRs Opened", "GL MRs Reviewed", "GL MRs Merged"] }
+
+        var lines = [headers.joined(separator: ",")]
+        for m in filteredSorted {
+            var row = [
+                csvEscape(m.displayName),
+                csvEscape(m.gitlabUsername),
+                csvEscape(m.gradeLevel.rawValue),
+                csvEscape(m.boardName),
+                String(format: "%.1f", m.avgPointsPerSprint),
+                String(format: "%.0f", m.completedPoints),
+                String(format: "%.0f", m.teamCommittedPoints),
+                String(format: "%.1f", m.relativeWorkload * 100),
+                "\(m.completedIssueCount)",
+                m.avgCycleTimeDays.map { String(format: "%.2f", $0) } ?? "",
+                "\(m.sprintsAnalyzed)",
+                "\(m.gradeRank)"
+            ]
+            if hasGL {
+                if let gl = m.gitLabActivity {
+                    row += ["\(gl.commits)", "\(gl.comments)", "\(gl.mrOpened)", "\(gl.mrReviewed)", "\(gl.mrMerged)"]
+                } else {
+                    row += ["", "", "", "", ""]
+                }
+            }
+            lines.append(row.joined(separator: ","))
+        }
+
+        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func csvEscape(_ s: String) -> String {
+        guard s.contains(",") || s.contains("\"") || s.contains("\n") else { return s }
+        return "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 }
 
@@ -270,6 +341,11 @@ private struct EngineerMetricsCard: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                 gradeBadge
+                if !metrics.gitlabUsername.isEmpty {
+                    Text("@\(metrics.gitlabUsername)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Color(red: 0.89, green: 0.44, blue: 0.0).opacity(0.8))
+                }
                 Spacer()
                 Text(metrics.boardName)
                     .font(.caption)
@@ -304,7 +380,7 @@ private struct EngineerMetricsCard: View {
                 .frame(height: 4)
             }
 
-            // Metric cells
+            // Jira metric cells
             HStack(spacing: 8) {
                 metricCell("Avg Pts/Sprint", value: String(format: "%.1f pts", metrics.avgPointsPerSprint))
                 metricCell("Total Completed", value: String(format: "%.0f pts", metrics.completedPoints))
@@ -312,6 +388,25 @@ private struct EngineerMetricsCard: View {
                 metricCell("Stories Done", value: "\(metrics.completedIssueCount)")
                 metricCell("Avg Cycle", value: metrics.cycleTimeFormatted)
                 metricCell("Sprints", value: "\(metrics.sprintsAnalyzed)")
+            }
+
+            // GitLab activity row (only when data is present)
+            if let gl = metrics.gitLabActivity {
+                Divider().opacity(0.3)
+                HStack(spacing: 6) {
+                    Image(systemName: "square.and.arrow.up.on.square")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color(red: 0.89, green: 0.44, blue: 0.0).opacity(0.7))
+                    Text("GitLab")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.89, green: 0.44, blue: 0.0).opacity(0.7))
+                    Spacer()
+                    glCell("commits", value: "\(gl.commits)")
+                    glCell("comments", value: "\(gl.comments)")
+                    glCell("MRs opened", value: "\(gl.mrOpened)")
+                    glCell("MRs reviewed", value: "\(gl.mrReviewed)")
+                    glCell("MRs merged", value: "\(gl.mrMerged)")
+                }
             }
         }
         .padding(14)
@@ -351,6 +446,20 @@ private struct EngineerMetricsCard: View {
         .padding(.vertical, 6)
         .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
     }
+
+    private func glCell(_ label: String, value: String) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            Text(value)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(red: 0.89, green: 0.44, blue: 0.0).opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+    }
 }
 
 // MARK: - Grade level ranking section
@@ -360,7 +469,6 @@ private struct GradeLevelRankingSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Section header
             HStack(spacing: 10) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(summary.gradeLevel.neonColor)
@@ -383,7 +491,6 @@ private struct GradeLevelRankingSection: View {
             .background(summary.gradeLevel.neonColor.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            // Ranked engineer rows
             ForEach(summary.engineers) { eng in
                 RankingRow(metrics: eng, maxWorkload: summary.engineers.first?.relativeWorkload ?? 1)
             }
@@ -397,7 +504,6 @@ private struct RankingRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Rank badge
             ZStack {
                 Circle()
                     .fill(metrics.gradeLevel.neonColor.opacity(metrics.gradeRank == 1 ? 0.25 : 0.08))
@@ -407,7 +513,6 @@ private struct RankingRow: View {
                     .foregroundStyle(metrics.gradeLevel.neonColor)
             }
 
-            // Name + board
             VStack(alignment: .leading, spacing: 2) {
                 Text(metrics.displayName)
                     .font(.system(size: 13, weight: .medium))
@@ -418,7 +523,6 @@ private struct RankingRow: View {
             }
             .frame(minWidth: 130, alignment: .leading)
 
-            // Workload bar + pct
             VStack(alignment: .leading, spacing: 3) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -437,11 +541,14 @@ private struct RankingRow: View {
 
             Spacer()
 
-            // Secondary metrics
             HStack(spacing: 16) {
                 labeledValue("avg pts", value: String(format: "%.1f", metrics.avgPointsPerSprint))
                 labeledValue("total", value: String(format: "%.0f", metrics.completedPoints))
                 labeledValue("cycle", value: metrics.cycleTimeFormatted)
+                if let gl = metrics.gitLabActivity {
+                    labeledValue("commits", value: "\(gl.commits)")
+                    labeledValue("MRs", value: "\(gl.mrOpened + gl.mrMerged)")
+                }
             }
         }
         .padding(.horizontal, 12)

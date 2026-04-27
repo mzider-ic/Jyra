@@ -6,10 +6,14 @@ struct SettingsView: View {
     @State private var jiraURL = ""
     @State private var email = ""
     @State private var apiKey = ""
+    @State private var gitlabToken = ""
     @State private var isTesting = false
+    @State private var isTestingGL = false
     @State private var isSaved = false
     @State private var testResult: String? = nil
     @State private var testSuccess = false
+    @State private var glTestResult: String? = nil
+    @State private var glTestSuccess = false
     @State private var velocityPalette = VelocityPalette.default
 
     var body: some View {
@@ -20,6 +24,42 @@ struct SettingsView: View {
                 TextField("Email", text: $email)
                 SecureField("API Token", text: $apiKey)
                     .help("Generate from id.atlassian.com/manage-profile/security/api-tokens")
+                HStack {
+                    Button("Test Jira Connection") {
+                        Task { await testConnection() }
+                    }
+                    .disabled(isTesting || isFormEmpty)
+
+                    if isTesting { ProgressView().scaleEffect(0.7) }
+
+                    if let result = testResult {
+                        Label(result, systemImage: testSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(testSuccess ? .green : .red)
+                            .font(.caption)
+                    }
+                }
+            }
+
+            Section("GitLab Activity (optional)") {
+                SecureField("Personal Access Token", text: $gitlabToken)
+                    .help("GitLab → User Settings → Access Tokens. Needs read_user + read_api scopes.")
+                Text("When set, engineer activity (commits, MRs, reviews) is fetched from GitLab Cloud and shown alongside calibration metrics.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Test GitLab Connection") {
+                        Task { await testGitLabConnection() }
+                    }
+                    .disabled(isTestingGL || gitlabToken.isEmpty)
+
+                    if isTestingGL { ProgressView().scaleEffect(0.7) }
+
+                    if let result = glTestResult {
+                        Label(result, systemImage: glTestSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(glTestSuccess ? .green : .red)
+                            .font(.caption)
+                    }
+                }
             }
 
             Section("Default Velocity Colors") {
@@ -30,23 +70,6 @@ struct SettingsView: View {
             }
 
             Section {
-                HStack {
-                    Button("Test Connection") {
-                        Task { await testConnection() }
-                    }
-                    .disabled(isTesting || isFormEmpty)
-
-                    if isTesting {
-                        ProgressView().scaleEffect(0.7)
-                    }
-
-                    if let result = testResult {
-                        Label(result, systemImage: testSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(testSuccess ? .green : .red)
-                            .font(.caption)
-                    }
-                }
-
                 Button("Save Settings") {
                     saveSettings()
                 }
@@ -83,6 +106,7 @@ struct SettingsView: View {
         jiraURL = cfg.jiraURL
         email = cfg.email
         apiKey = cfg.apiKey
+        gitlabToken = cfg.gitlabToken
         velocityPalette = cfg.velocityPalette
     }
 
@@ -90,7 +114,8 @@ struct SettingsView: View {
         isTesting = true
         testResult = nil
         defer { isTesting = false }
-        let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey, velocityPalette: velocityPalette)
+        let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey,
+                            velocityPalette: velocityPalette, gitlabToken: gitlabToken)
         do {
             let name = try await JiraService(config: cfg).ping()
             testSuccess = true
@@ -101,8 +126,23 @@ struct SettingsView: View {
         }
     }
 
+    private func testGitLabConnection() async {
+        isTestingGL = true
+        glTestResult = nil
+        defer { isTestingGL = false }
+        do {
+            let username = try await GitLabService(token: gitlabToken).ping()
+            glTestSuccess = true
+            glTestResult = "Connected as @\(username)"
+        } catch {
+            glTestSuccess = false
+            glTestResult = error.localizedDescription
+        }
+    }
+
     private func saveSettings() {
-        let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey, velocityPalette: velocityPalette)
+        let cfg = AppConfig(jiraURL: jiraURL, email: email, apiKey: apiKey,
+                            velocityPalette: velocityPalette, gitlabToken: gitlabToken)
         try? configService.save(cfg)
         isSaved = true
         Task {
