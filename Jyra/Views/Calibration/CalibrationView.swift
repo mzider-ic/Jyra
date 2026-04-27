@@ -123,7 +123,7 @@ struct CalibrationView: View {
                 .foregroundStyle(.secondary)
             Picker("Grade", selection: $gradeFilter) {
                 Text("All").tag(GradeLevel?.none)
-                ForEach(GradeLevel.allCases, id: \.self) { g in
+                ForEach(GradeLevel.allCases.filter(\.isCalibrationRole), id: \.self) { g in
                     Text(g.shortName).tag(GradeLevel?.some(g))
                 }
             }

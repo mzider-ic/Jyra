@@ -10,6 +10,17 @@ enum GradeLevel: String, Codable, CaseIterable, Hashable {
     case staffEngineer      = "Staff Engineer"
     case principalEngineer  = "Principal Engineer"
     case engineeringManager = "Engineering Manager"
+    case productOwner       = "Product Owner"
+    case businessAnalyst    = "Business Analyst"
+
+    /// Whether this role participates in calibration metrics.
+    /// POs and BAs are tracked in the roster but excluded from the calibration view.
+    var isCalibrationRole: Bool {
+        switch self {
+        case .productOwner, .businessAnalyst: return false
+        default: return true
+        }
+    }
 
     var shortName: String {
         switch self {
@@ -19,6 +30,8 @@ enum GradeLevel: String, Codable, CaseIterable, Hashable {
         case .staffEngineer:      return "Staff"
         case .principalEngineer:  return "Principal"
         case .engineeringManager: return "EM"
+        case .productOwner:       return "PO"
+        case .businessAnalyst:    return "BA"
         }
     }
 
@@ -30,6 +43,8 @@ enum GradeLevel: String, Codable, CaseIterable, Hashable {
         case .staffEngineer:      return RuleColor.neonOrange.swiftUI
         case .principalEngineer:  return RuleColor.neonRed.swiftUI
         case .engineeringManager: return Color(white: 0.65)
+        case .productOwner:       return Color(white: 0.55)
+        case .businessAnalyst:    return Color(white: 0.55)
         }
     }
 }
@@ -172,20 +187,19 @@ func computeEngineerMetrics(
         }
     }
 
-    let assignmentMap = Dictionary(uniqueKeysWithValues: assignments.map { ($0.jiraAccountId, $0) })
-    let allIds = Set(sprints.flatMap { $0.issues }.compactMap(\.accountId))
-
-    return allIds.map { aid in
-        let assignment = assignmentMap[aid]
-        let name      = assignment?.displayName ?? nameByAcct[aid] ?? aid
-        let grade     = assignment?.gradeLevel ?? .engineer
-        let glUser    = assignment?.gitlabUsername ?? ""
-        let times     = cycleTimes[aid] ?? []
+    // Only produce metrics for engineers who are explicitly on the roster
+    // and have a calibration-eligible role (not PO / BA).
+    // Unrostered assignees and POs/BAs still contribute to teamCommittedPoints
+    // (their work counts as "other work" in the denominator).
+    return assignments.compactMap { assignment -> EngineerMetrics? in
+        guard assignment.gradeLevel.isCalibrationRole else { return nil }
+        let aid   = assignment.jiraAccountId
+        let times = cycleTimes[aid] ?? []
         return EngineerMetrics(
             accountId: aid,
-            displayName: name,
-            gitlabUsername: glUser,
-            gradeLevel: grade,
+            displayName: assignment.displayName,
+            gitlabUsername: assignment.gitlabUsername,
+            gradeLevel: assignment.gradeLevel,
             boardId: boardRef.boardId,
             boardName: boardRef.boardName,
             completedPoints: completedPts[aid] ?? 0,

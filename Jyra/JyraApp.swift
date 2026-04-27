@@ -21,12 +21,6 @@ struct JyraApp: App {
         .defaultSize(width: 1280, height: 800)
         .commands {
             CommandGroup(replacing: .newItem) {}
-            CommandGroup(after: .appSettings) {
-                Button("Settings…") {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
             CommandMenu("Debug") {
                 Button("Network Log…") {
                     NotificationCenter.default.post(name: .showNetworkLog, object: nil)

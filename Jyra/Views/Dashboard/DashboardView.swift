@@ -126,6 +126,16 @@ struct DashboardView: View {
             }
         }
         .navigationTitle("Jyra")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                } label: {
+                    Image(systemName: "gear")
+                }
+                .help("Settings (⌘,)")
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 Divider()

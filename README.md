@@ -1,6 +1,6 @@
 # Jyra
 
-Jyra is a native macOS SwiftUI app for Jira. It connects to a Jira Cloud instance with an API token and gives you two complementary views into your Jira data:
+Jyra is a native macOS SwiftUI app for Jira. It connects to a Jira Cloud instance with an API token and gives you four complementary views into your team's data:
 
 **Dashboards** — build flexible dashboards made up of widgets that visualize team metrics:
 
@@ -10,35 +10,42 @@ Jyra is a native macOS SwiftUI app for Jira. It connects to a Jira Cloud instanc
 
 **Boards** — live kanban/scrum board views with neon card UIs, configurable metric highlight rules, and click-to-expand story details
 
+**Calibration** — per-engineer sprint metrics with grade-level normalization and relative workload ranking; optionally enriched with GitLab activity data
+
+**Settings** — connection settings for Jira and GitLab, accessible via the **⚙ gear icon** in the sidebar or **⌘,** from anywhere in the app
+
 ## How The App Works
 
-At launch, [JyraApp.swift](./Jyra/JyraApp.swift) creates a `ConfigService`, a `MetricsStore`, a `JiraDataCache`, a `BoardService`, and a `NetworkLogger`, and injects all of them into the SwiftUI environment.
+At launch, [JyraApp.swift](./Jyra/JyraApp.swift) creates a `ConfigService`, a `MetricsStore`, a `JiraDataCache`, a `BoardService`, a `CalibrationService`, and a `NetworkLogger`, and injects all of them into the SwiftUI environment.
 
 - If Jira credentials are not configured, [ContentView.swift](./Jyra/ContentView.swift) shows [SetupView.swift](./Jyra/Views/Setup/SetupView.swift).
 - If credentials exist, it shows [DashboardView.swift](./Jyra/Views/Dashboard/DashboardView.swift).
 
 The basic runtime flow is:
 
-1. User enters Jira URL, email, and API token.
-2. `ConfigService` stores the token in Keychain and the non-secret fields in `UserDefaults`.
-3. `DashboardService` loads dashboards from disk; `BoardService` loads boards from disk.
-4. Each widget checks `JiraDataCache` before fetching. On a cache miss it calls `JiraService`, stores the result, and publishes metrics to `MetricsStore`. Board views follow the same cache pattern.
+1. User enters Jira URL, email, and API token in Settings.
+2. `ConfigService` stores both tokens in the macOS Keychain and the non-secret fields in `UserDefaults`.
+3. `DashboardService` loads dashboards from disk; `BoardService` and `CalibrationService` load their data from disk.
+4. Each widget checks `JiraDataCache` before fetching. On a cache miss it calls `JiraService`, stores the result, and publishes metrics to `MetricsStore`. Board and calibration views follow the same cache pattern.
 
 ## Project Structure
 
 `Jyra/Models`
 
-- `AppConfig.swift`: Jira connection settings and auth header generation
+- `AppConfig.swift`: Jira and GitLab connection settings and auth header generation
 - `DashboardModels.swift`: dashboards, widgets, and widget config payloads
 - `JiraModels.swift`: decoded Jira API response shapes and derived chart models
 - `BoardModels.swift`: `Board`, `BoardIssue`, `BoardColumn`, `BoardMetricRule`, `RuleColor`, `BoardRuleField`, `BoardRuleOperator`
+- `CalibrationModels.swift`: `CalibrationConfig`, `EngineerAssignment`, `GradeLevel`, `EngineerMetrics`, `GradeLevelSummary`, `GitLabActivity`
 
 `Jyra/Services`
 
-- `ConfigService.swift`: persists Jira credentials
+- `ConfigService.swift`: persists Jira and GitLab credentials (both in Keychain)
 - `DashboardService.swift`: persists dashboards and widgets
-- `BoardService.swift`: persists named boards to `boards.json`; exposes `add`, `update`, `delete`
-- `JiraService.swift`: all Jira HTTP calls and widget/board data shaping; instruments every request through `NetworkLogger`
+- `BoardService.swift`: persists named boards to `boards.json`
+- `CalibrationService.swift`: persists calibration configs to `calibrations.json`
+- `GitLabService.swift`: fetches engineer activity from GitLab Cloud (commits, comments, MRs, reviews)
+- `JiraService.swift`: all Jira HTTP calls and widget/board/calibration data shaping
 - `JiraDataCache.swift`: in-memory response cache with a 5-minute TTL and per-widget/board force-refresh
 - `MetricsStore.swift`: collects widget metrics and aggregates them by widget type for the dashboard summary section
 - `NetworkLogger.swift`: captures every Jira HTTP request and response for the in-app debug panel and Xcode console
@@ -46,21 +53,24 @@ The basic runtime flow is:
 `Jyra/Views`
 
 - `Setup/`: first-run Jira connection flow
-- `Dashboard/`: unified sidebar (dashboards + boards), widget containers, add-widget sheet
+- `Dashboard/`: unified sidebar (dashboards + boards + calibrations), widget containers, add-widget sheet
 - `Boards/`: board kanban view, card view, card detail sheet, and board config sheet
+- `Calibration/`: per-engineer metrics view and calibration config sheet
 - `Widgets/`: individual widget views and configuration form
 - `Shared/`: reusable search controls for boards, fields, and issues
+- `SettingsView.swift`: Jira and GitLab connection settings
 - `NetworkLogView.swift`: the in-app HTTP inspector opened from `Debug → Network Log…`
 
 ## Persistence
 
-### Jira Credentials
+### Jira and GitLab Credentials
 
 [ConfigService.swift](./Jyra/Services/ConfigService.swift) stores:
 
 - Jira URL in `UserDefaults`
 - Jira email in `UserDefaults`
-- Jira API token in the macOS Keychain
+- Jira API token in the macOS Keychain (`com.jyra.apikey`)
+- GitLab Personal Access Token in the macOS Keychain (`com.jyra.gitlabtoken`)
 
 `AppConfig.authHeader` generates the Basic auth header from `email:apiKey`.
 
@@ -80,14 +90,41 @@ Each dashboard contains widgets, and each widget stores a typed `WidgetConfig` p
 
 Each board stores its name, the linked Jira board ID and name, an optional points field, and an ordered list of `BoardMetricRule` objects. Metric rules are fully `Codable`; `RuleColor` is stored as `r/g/b` Double triplets to avoid bridging issues with SwiftUI `Color`.
 
+### Calibrations
+
+[CalibrationService.swift](./Jyra/Services/CalibrationService.swift) stores calibration configs in:
+
+`~/Library/Application Support/Jyra/calibrations.json`
+
+Each calibration stores its name, linked boards, sprint count, and the engineer roster with grade levels and optional GitLab usernames.
+
 ## Navigation
 
-The app uses a `NavigationSplitView` with a unified sidebar that has two sections:
+The app uses a `NavigationSplitView` with a unified sidebar that has three sections:
 
-- **Dashboards** — lists all saved dashboards; context-menu supports rename and delete; footer button adds a new dashboard
-- **Boards** — lists all saved boards; context-menu supports configure and delete; footer button adds a new board
+- **Dashboards** — lists all saved dashboards; context-menu supports rename and delete
+- **Boards** — lists all saved boards; context-menu supports configure and delete
+- **Calibration** — lists all saved calibration configs; context-menu supports configure and delete
 
-Selecting a dashboard shows the widget grid. Selecting a board shows the kanban view. Both share the same sidebar list and detail area.
+All three sections share a footer row of **+ New …** buttons. A **⚙ gear** button in the sidebar title bar opens Settings directly; **⌘,** does the same from anywhere.
+
+## Settings
+
+Settings are accessible via:
+
+- **⚙ gear icon** in the top-right corner of the sidebar
+- **⌘,** keyboard shortcut (standard macOS convention)
+- **Jyra → Settings…** in the menu bar
+
+The settings panel has three sections:
+
+| Section | Contents |
+|---------|----------|
+| Jira Connection | URL, email, API token, Test Connection button |
+| GitLab Activity (optional) | Personal Access Token, Test Connection button |
+| Default Velocity Colors | Color pickers for the four velocity chart series |
+
+Both tokens are stored in the macOS Keychain; nothing sensitive is written to `UserDefaults` or disk.
 
 ## Jira Integration
 
@@ -296,6 +333,76 @@ Settings:
 
 The board toolbar has a **↺** refresh button that immediately evicts the board's `JiraDataCache` entry and re-fetches all issues from Jira. The same 5-minute TTL and cache-key scheme used by widgets applies to boards.
 
+## Calibration
+
+Calibration is a per-engineer workload analysis tool. Each calibration config is linked to one or more Jira boards and analyzes a configurable number of recent closed sprints (plus the active sprint if one exists).
+
+### Engineer Roster
+
+Each calibration has an **engineer roster** — a curated list of people whose metrics you want to track. People not on the roster (e.g. stakeholders who occasionally appear as Jira assignees) are excluded from individual metric cards; their sprint work still contributes to the team's committed-point denominator and is treated as "other work."
+
+**Roles available:**
+
+| Role | Included in calibration metrics |
+|------|---------------------------------|
+| Intern | Yes |
+| Engineer | Yes |
+| Senior Engineer | Yes |
+| Staff Engineer | Yes |
+| Principal Engineer | Yes |
+| Engineering Manager | Yes |
+| Product Owner | No — excluded; work counts as "other work" |
+| Business Analyst | No — excluded; work counts as "other work" |
+
+You can remove anyone from the roster at any time by right-clicking their card and choosing **Remove from Roster**. The removal is immediate and persisted; the person does not reappear on the next data refresh.
+
+Use **Discover Engineers** in the calibration config to automatically find all Jira assignees from recent sprint data and add them to the roster in one step.
+
+### Metrics Per Engineer
+
+| Metric | Description |
+|--------|-------------|
+| Avg Pts/Sprint | Completed points ÷ sprints analyzed |
+| Total Completed | Sum of completed story points across all analyzed sprints |
+| Team Committed | Total points the team committed across all analyzed sprints (denominator for relative workload) |
+| Relative Workload | Engineer's completed points as a fraction of total team committed points |
+| Stories Done | Count of completed issues |
+| Avg Cycle Time | Mean time from "In Progress" to "Done" (hours if < 1 day, days otherwise) |
+| Grade Rank | Rank within the same grade level, sorted by relative workload |
+
+### Grade-Level Rankings
+
+The **Grade Rankings** tab groups engineers by grade and ranks them by relative workload within each group. This enables fair cross-team comparison: a Senior Engineer's workload is only benchmarked against other Senior Engineers.
+
+### GitLab Activity
+
+If a GitLab Personal Access Token is configured in Settings, additional activity metrics are fetched from GitLab Cloud and shown on each engineer card:
+
+| Metric | Source |
+|--------|--------|
+| Commits | Push events (commit count from push_data) |
+| Comments | Note/comment events |
+| MRs Opened | Merge request open events |
+| MRs Reviewed | Merge request accepted/approval events |
+| MRs Merged | Merge request merged events |
+
+To link a Jira engineer to their GitLab account, enter their GitLab **@username** in the engineer row inside the calibration config sheet. The lookback window matches the configured sprint count (approximately sprint count × 14 days).
+
+### CSV Export
+
+The **↑ export button** in the calibration toolbar exports all currently visible engineer metrics to a CSV file. The export respects the active grade filter and sort order. When GitLab data is present, five additional columns are appended.
+
+### Calibration Configuration
+
+Open the configuration sheet with the **slider icon** in the calibration toolbar.
+
+Settings:
+
+- **Name**: display name for the calibration
+- **Boards**: one or more Jira boards to analyze; each board can have its own points field
+- **Sprint Window**: number of recent sprints to analyze (1–10)
+- **Engineers**: roster with grade level and optional GitLab username per person
+
 ## Widget Layout
 
 ### Drag-and-Drop Reordering
@@ -365,11 +472,18 @@ When the app starts without credentials:
 
 1. Enter your Jira base URL, for example `https://your-org.atlassian.net`
 2. Enter the Jira account email
-3. Enter an API token
-4. Click `Test Connection`
-5. Click `Save & Continue`
+3. Enter an API token (generate one at id.atlassian.com → Security → API tokens)
+4. Click **Test Connection**
+5. Click **Save & Continue**
 
-You can later update or clear the connection from Settings.
+To connect GitLab (optional):
+
+1. Open Settings (⌘, or the gear icon in the sidebar)
+2. Under **GitLab Activity**, paste a Personal Access Token with `read_user` and `read_api` scopes
+3. Click **Test GitLab Connection** to verify
+4. Click **Save Settings**
+
+You can update or clear either connection from Settings at any time.
 
 ## Network Debugging
 
@@ -544,6 +658,8 @@ Available scope issues:
 - The app is designed for Jira Cloud-style REST endpoints.
 - Project Burn Rate expands scope using direct issue keys and `parent in (...)`. If a Jira instance uses different parent-link semantics, additional JQL variants may be needed.
 - Burndown requires sprint `startDate` and `endDate` to be populated in Jira.
+- GitLab integration targets GitLab Cloud (gitlab.com). Self-managed GitLab instances are not currently supported.
+- The GitLab activity lookback window is estimated as sprint count × 14 + 7 days; it does not use actual sprint start dates.
 - The network log panel captures up to 500 entries before dropping the oldest. It is intended for development and debugging — it is active in the Debug and Mock schemes only (controlled by `JYRA_DEBUG_NETWORK`).
 - There are currently no automated tests in the repository.
 - All state is local to the Mac; there is no backend or sync layer.
