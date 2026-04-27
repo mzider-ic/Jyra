@@ -133,7 +133,7 @@ struct CalibrationConfigView: View {
                 .environment(configService)
             }
         }
-        .frame(minWidth: 520, idealWidth: 580, minHeight: 500)
+        .frame(minWidth: 480, idealWidth: 580, maxWidth: 700, minHeight: 460, maxHeight: 800)
         .task {
             guard let cfg = configService.config else { return }
             availableFields = (try? await JiraService(config: cfg).fetchFields()) ?? []
@@ -272,6 +272,6 @@ private struct CalibrationAddBoardSheet: View {
                 }
             }
         }
-        .frame(minWidth: 420, idealWidth: 480, minHeight: 260)
+        .frame(minWidth: 380, idealWidth: 460, maxWidth: 560, minHeight: 240, maxHeight: 380)
     }
 }
