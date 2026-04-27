@@ -47,3 +47,46 @@ schemes:
       config: Debug
     archive:
       config: Release
+
+  Jyra (Debug):
+    build:
+      targets:
+        Jyra: all
+    run:
+      config: Debug
+      environmentVariables:
+        JYRA_DEBUG_NETWORK: "1"
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  Jyra (Mock):
+    build:
+      targets:
+        Jyra: all
+    run:
+      config: Debug
+      preActions:
+        - name: Start Mock Jira
+          script: bash "$SRCROOT/mock-jira/start.sh"
+          settingsTarget: Jyra
+      postActions:
+        - name: Stop Mock Jira
+          script: bash "$SRCROOT/mock-jira/stop.sh"
+          settingsTarget: Jyra
+      environmentVariables:
+        JYRA_MOCK_URL: "http://localhost:3001"
+        JYRA_DEBUG_NETWORK: "1"
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
