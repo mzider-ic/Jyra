@@ -76,32 +76,37 @@ struct BoardSearchField: View {
     }
 
     private var resultsList: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(results) { board in
-                Button {
-                    selectedBoard = board
-                    isChanging = false
-                    searchText = ""
-                    results = []
-                } label: {
-                    HStack {
-                        Text(board.name)
-                        Spacer()
-                        Text(board.type)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(results) { board in
+                    Button {
+                        selectedBoard = board
+                        isChanging = false
+                        searchText = ""
+                        results = []
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(board.name)
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text(board.type)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
 
-                if board.id != results.last?.id {
-                    Divider().padding(.leading, 10)
+                    if board.id != results.last?.id {
+                        Divider().padding(.leading, 10)
+                    }
                 }
             }
         }
+        .frame(maxHeight: 180)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.15), radius: 4, y: 2)

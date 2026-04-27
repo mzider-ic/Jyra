@@ -133,7 +133,7 @@ struct CalibrationConfigView: View {
                 .environment(configService)
             }
         }
-        .adaptiveModal()
+        .adaptiveModal(widthFraction: 0.55)
         .task {
             guard let cfg = configService.config else { return }
             availableFields = (try? await JiraService(config: cfg).fetchFields()) ?? []
