@@ -15,6 +15,7 @@
 		392C5ED91B8F0F8068FCA9A8 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27357B3E4FB7F3B6CC1BD92A /* SetupView.swift */; };
 		4A047A00B61C498AAED0F0CF /* BoardSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7157008BB68D44B253C48334 /* BoardSearchField.swift */; };
 		4F50C1F01111111111111111 /* FieldSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F50C1F11111111111111111 /* FieldSearchField.swift */; };
+		MF1111111111111111111111 /* ModalFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = MF2222222222222222222222 /* ModalFrame.swift */; };
 		5B29FAE6797631E1752DF665 /* Charts.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DF726889D7D43F61D5A72426 /* Charts.framework */; };
 		5B32A8BD501C9ADF1B07EE2F /* ConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A486C11E57C99E68EBFC63 /* ConfigService.swift */; };
 		64244527F131FE5C2414553E /* JiraService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10250A20A651EEF24A547028 /* JiraService.swift */; };
@@ -52,6 +53,7 @@
 		46F7818CD2D0A53A529F3242 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		4F7E51F0F7550228ADF66ED8 /* WidgetConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetConfigView.swift; sourceTree = "<group>"; };
 		4F50C1F11111111111111111 /* FieldSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldSearchField.swift; sourceTree = "<group>"; };
+		MF2222222222222222222222 /* ModalFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModalFrame.swift; sourceTree = "<group>"; };
 		517149259EA4FC686B868ABA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		5AC2BFABF7B83DC235406B3B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B650C1F11111111111111111 /* IssueSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueSearchField.swift; sourceTree = "<group>"; };
@@ -127,6 +129,7 @@
 				7157008BB68D44B253C48334 /* BoardSearchField.swift */,
 				4F50C1F11111111111111111 /* FieldSearchField.swift */,
 				B650C1F11111111111111111 /* IssueSearchField.swift */,
+				MF2222222222222222222222 /* ModalFrame.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -297,6 +300,7 @@
 				C0EDC127A39C7A3A6EB55E1A /* AppConfig.swift in Sources */,
 				BD2222222222222222222222 /* BoardModels.swift in Sources */,
 				4A047A00B61C498AAED0F0CF /* BoardSearchField.swift in Sources */,
+				MF1111111111111111111111 /* ModalFrame.swift in Sources */,
 				BD4444444444444444444444 /* BoardService.swift in Sources */,
 				BD6666666666666666666666 /* BoardView.swift in Sources */,
 				BD8888888888888888888888 /* BoardCardView.swift in Sources */,

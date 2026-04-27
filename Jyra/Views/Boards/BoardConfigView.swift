@@ -111,7 +111,7 @@ struct BoardConfigView: View {
                 }
             }
         }
-        .frame(minWidth: 480, idealWidth: 560, maxWidth: 660, minHeight: 440, maxHeight: 760)
+        .adaptiveModal()
         .onAppear {
             if !draft.jiraBoardName.isEmpty {
                 selectedJiraBoard = JiraBoard(id: draft.jiraBoardId, name: draft.jiraBoardName, type: "scrum")
@@ -267,7 +267,7 @@ struct RuleEditorView: View {
                 }
             }
         }
-        .frame(minWidth: 460, idealWidth: 520, maxWidth: 620, minHeight: 360, maxHeight: 700)
+        .adaptiveModal(widthFraction: 0.45, minHeight: 340)
     }
 
     // MARK: - Condition row
