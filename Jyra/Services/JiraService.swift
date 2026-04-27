@@ -182,9 +182,12 @@ actor JiraService {
             return nil
         }()
 
-        // Auto-detect preferred points field when none is configured
+        // Auto-detect preferred points field when none is configured.
+        // "story_points" is the mock-server placeholder; treat it as unconfigured
+        // so real Jira instances get the correct customfield_XXXXX ID.
         let pointsField: String
-        if config.pointsField.isEmpty {
+        let isUnconfigured = config.pointsField.isEmpty || config.pointsField == "story_points"
+        if isUnconfigured {
             pointsField = (try? await fetchPreferredPointsField())?.id ?? "story_points"
         } else {
             pointsField = config.pointsField
@@ -318,12 +321,15 @@ actor JiraService {
         }
         let sprintField = try await fetchSprintField()
 
-        // Collect all unique non-empty per-epic fields; fall back to global, then "story_points"
-        var allFields = config.parentIssues.map(\.pointsField).filter { !$0.isEmpty }
-        if !config.pointsField.isEmpty, !allFields.contains(config.pointsField) {
+        // Collect unique non-empty per-epic fields; "story_points" is the mock placeholder, skip it.
+        let isMockPlaceholder = { (f: String) in f.isEmpty || f == "story_points" }
+        var allFields = config.parentIssues.map(\.pointsField).filter { !isMockPlaceholder($0) }
+        if !isMockPlaceholder(config.pointsField), !allFields.contains(config.pointsField) {
             allFields.append(config.pointsField)
         }
-        if allFields.isEmpty { allFields = ["story_points"] }
+        if allFields.isEmpty {
+            allFields = [(try? await fetchPreferredPointsField())?.id ?? "story_points"]
+        }
 
         let issues = try await fetchChildIssues(
             parentKeys: config.parentIssues.map(\.key),

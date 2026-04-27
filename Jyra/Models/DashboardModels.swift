@@ -115,8 +115,8 @@ struct BurndownConfig: Codable, Equatable {
     var boardName: String
     var sprintId: SprintSelection = .active
     var sprintName: String = "Active sprint"
-    var pointsField: String = "story_points"
-    var pointsFieldName: String = "Story Points"
+    var pointsField: String = ""
+    var pointsFieldName: String = ""
 
     enum SprintSelection: Codable, Equatable {
         case active
@@ -139,8 +139,8 @@ struct ProjectBurnRateConfig: Codable, Equatable {
 
     init(
         projectName: String,
-        pointsField: String = "story_points",
-        pointsFieldName: String = "Story Points",
+        pointsField: String = "",
+        pointsFieldName: String = "",
         parentIssues: [ScopeIssue] = []
     ) {
         self.projectName = projectName
