@@ -244,7 +244,7 @@ struct CalibrationView: View {
                     sprintCount: calibration.sprintCount,
                     pointsField: pf
                 )
-                let m = computeEngineerMetrics(sprints: sprints, boardRef: boardRef, assignments: calibration.engineers)
+                let m = computeEngineerMetrics(sprints: sprints, boardRef: boardRef, assignments: calibration.engineers, customRoles: calibration.customRoles)
                 collected.append(contentsOf: m)
             }
 
@@ -423,7 +423,7 @@ private struct EngineerMetricsCard: View {
     }
 
     private var gradeBadge: some View {
-        Text(metrics.gradeLevel.shortName)
+        Text(metrics.roleName)
             .font(.system(size: 10, weight: .semibold))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

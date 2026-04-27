@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Grade Level
+// MARK: - Grade Level (calibration grouping / ranking tier)
 
 enum GradeLevel: String, Codable, CaseIterable, Hashable {
     case intern             = "Intern"
@@ -13,8 +13,7 @@ enum GradeLevel: String, Codable, CaseIterable, Hashable {
     case productOwner       = "Product Owner"
     case businessAnalyst    = "Business Analyst"
 
-    /// Whether this role participates in calibration metrics.
-    /// POs and BAs are tracked in the roster but excluded from the calibration view.
+    /// Whether this tier participates in calibration metrics.
     var isCalibrationRole: Bool {
         switch self {
         case .productOwner, .businessAnalyst: return false
@@ -49,14 +48,25 @@ enum GradeLevel: String, Codable, CaseIterable, Hashable {
     }
 }
 
+// MARK: - Custom role (user-defined, maps to a GradeLevel for ranking)
+
+struct CalibrationRole: Identifiable, Codable, Hashable {
+    var id: String = UUID().uuidString
+    var name: String          // e.g. "59IC", "L5", "Staff SWE"
+    var gradeLevel: GradeLevel
+
+    var isCalibrationRole: Bool { gradeLevel.isCalibrationRole }
+    var neonColor: Color { gradeLevel.neonColor }
+}
+
 // MARK: - GitLab activity
 
 struct GitLabActivity {
-    var commits: Int  = 0
-    var comments: Int = 0
-    var mrOpened: Int = 0
+    var commits: Int    = 0
+    var comments: Int   = 0
+    var mrOpened: Int   = 0
     var mrReviewed: Int = 0
-    var mrMerged: Int = 0
+    var mrMerged: Int   = 0
 
     var totalEvents: Int { commits + comments + mrOpened + mrReviewed + mrMerged }
 }
@@ -67,8 +77,9 @@ struct EngineerAssignment: Identifiable, Codable, Hashable {
     var id: String = UUID().uuidString
     var jiraAccountId: String
     var displayName: String
-    var gradeLevel: GradeLevel
+    var gradeLevel: GradeLevel        // standard grade (fallback / default)
     var gitlabUsername: String = ""
+    var roleId: String = ""           // ID of CalibrationRole; empty = use gradeLevel
 }
 
 struct CalibrationBoardRef: Codable, Equatable {
@@ -84,6 +95,7 @@ struct CalibrationConfig: Identifiable, Codable {
     var boards: [CalibrationBoardRef] = []
     var sprintCount: Int = 3
     var engineers: [EngineerAssignment] = []
+    var customRoles: [CalibrationRole] = []
 }
 
 // MARK: - Runtime (not persisted)
@@ -117,6 +129,7 @@ struct EngineerMetrics: Identifiable {
     var displayName: String
     var gitlabUsername: String
     var gradeLevel: GradeLevel
+    var roleName: String              // custom role name, or gradeLevel.rawValue if none
     var boardId: Int
     var boardName: String
     var completedPoints: Double
@@ -166,19 +179,18 @@ struct GradeLevelSummary: Identifiable {
 func computeEngineerMetrics(
     sprints: [CalibrationSprint],
     boardRef: CalibrationBoardRef,
-    assignments: [EngineerAssignment]
+    assignments: [EngineerAssignment],
+    customRoles: [CalibrationRole] = []
 ) -> [EngineerMetrics] {
     var completedPts:  [String: Double]   = [:]
     var completedCnt:  [String: Int]      = [:]
     var cycleTimes:    [String: [Double]] = [:]
-    var nameByAcct:    [String: String]   = [:]
     var teamCommitted  = 0.0
 
     for sprint in sprints {
         teamCommitted += sprint.committedPoints
         for issue in sprint.issues {
             guard let aid = issue.accountId else { continue }
-            if let n = issue.displayName { nameByAcct[aid] = n }
             if issue.isDone {
                 completedPts[aid, default: 0] += issue.points
                 completedCnt[aid, default: 0] += 1
@@ -187,19 +199,24 @@ func computeEngineerMetrics(
         }
     }
 
-    // Only produce metrics for engineers who are explicitly on the roster
-    // and have a calibration-eligible role (not PO / BA).
-    // Unrostered assignees and POs/BAs still contribute to teamCommittedPoints
-    // (their work counts as "other work" in the denominator).
+    let roleMap = Dictionary(uniqueKeysWithValues: customRoles.map { ($0.id, $0) })
+
+    // Only produce metrics for roster engineers with calibration-eligible grades.
     return assignments.compactMap { assignment -> EngineerMetrics? in
-        guard assignment.gradeLevel.isCalibrationRole else { return nil }
+        let customRole = assignment.roleId.isEmpty ? nil : roleMap[assignment.roleId]
+        let grade      = customRole?.gradeLevel ?? assignment.gradeLevel
+        guard grade.isCalibrationRole else { return nil }
+
+        let rName = customRole?.name ?? grade.rawValue
         let aid   = assignment.jiraAccountId
         let times = cycleTimes[aid] ?? []
+
         return EngineerMetrics(
             accountId: aid,
             displayName: assignment.displayName,
             gitlabUsername: assignment.gitlabUsername,
-            gradeLevel: assignment.gradeLevel,
+            gradeLevel: grade,
+            roleName: rName,
             boardId: boardRef.boardId,
             boardName: boardRef.boardName,
             completedPoints: completedPts[aid] ?? 0,

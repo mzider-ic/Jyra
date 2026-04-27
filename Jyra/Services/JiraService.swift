@@ -21,6 +21,13 @@ actor JiraService {
         return me.displayName
     }
 
+    /// Returns the email address for a Jira user, or nil if not visible due to privacy settings.
+    func fetchUserEmail(accountId: String) async throws -> String? {
+        struct JiraUser: Decodable { let emailAddress: String? }
+        let user: JiraUser = try await get("/rest/api/3/user", query: ["accountId": accountId])
+        return user.emailAddress
+    }
+
     // MARK: - Boards
 
     func searchBoards(name: String = "") async throws -> [JiraBoard] {

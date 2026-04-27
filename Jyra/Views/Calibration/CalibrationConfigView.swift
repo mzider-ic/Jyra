@@ -1,5 +1,16 @@
 import SwiftUI
 
+// MARK: - Role selection tag (merges custom roles + standard grade levels in one Picker)
+
+private enum RolePick: Hashable {
+    case custom(String)    // CalibrationRole.id
+    case grade(GradeLevel)
+
+    static func from(_ assignment: EngineerAssignment) -> RolePick {
+        assignment.roleId.isEmpty ? .grade(assignment.gradeLevel) : .custom(assignment.roleId)
+    }
+}
+
 struct CalibrationConfigView: View {
     @Environment(ConfigService.self)      private var configService
     @Environment(CalibrationService.self) private var calibrationService
@@ -9,8 +20,8 @@ struct CalibrationConfigView: View {
 
     @State private var draft: CalibrationConfig
     @State private var availableFields: [JiraField] = []
-    @State private var isAddingBoard = false
-    @State private var isDiscovering = false
+    @State private var isAddingBoard    = false
+    @State private var isDiscovering    = false
     @State private var discoverError: String? = nil
 
     init(calibration: CalibrationConfig, onDismiss: @escaping (CalibrationConfig?) -> Void) {
@@ -31,10 +42,9 @@ struct CalibrationConfigView: View {
 
     var body: some View {
         let W = screenSize.width  * 0.6
-        let H = screenSize.height * 0.78
+        let H = screenSize.height * 0.82
 
         VStack(spacing: 0) {
-            // Title bar
             HStack {
                 Button("Cancel") { onDismiss(nil) }
                     .keyboardShortcut(.cancelAction)
@@ -57,6 +67,7 @@ struct CalibrationConfigView: View {
                     nameSection
                     boardsSection
                     sprintSection
+                    rolesSection
                     engineersSection
                 }
                 .padding(20)
@@ -81,7 +92,7 @@ struct CalibrationConfigView: View {
         }
     }
 
-    // MARK: - Sections
+    // MARK: - Name
 
     private var nameSection: some View {
         configSection("Name") {
@@ -89,6 +100,8 @@ struct CalibrationConfigView: View {
                 .textFieldStyle(.roundedBorder)
         }
     }
+
+    // MARK: - Boards
 
     private var boardsSection: some View {
         configSection(
@@ -114,11 +127,8 @@ struct CalibrationConfigView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button {
-                            draft.boards.remove(at: i)
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundStyle(.secondary)
+                        Button { draft.boards.remove(at: i) } label: {
+                            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -126,17 +136,15 @@ struct CalibrationConfigView: View {
                     if i < draft.boards.count - 1 { Divider() }
                 }
             }
-
-            Button {
-                isAddingBoard = true
-            } label: {
-                Label("Add Board", systemImage: "plus")
-                    .font(.system(size: 13))
+            Button { isAddingBoard = true } label: {
+                Label("Add Board", systemImage: "plus").font(.system(size: 13))
             }
             .buttonStyle(.borderless)
             .padding(.top, draft.boards.isEmpty ? 0 : 4)
         }
     }
+
+    // MARK: - Sprint window
 
     private var sprintSection: some View {
         configSection("Sprint Window") {
@@ -151,10 +159,78 @@ struct CalibrationConfigView: View {
         }
     }
 
+    // MARK: - Custom roles
+
+    private var rolesSection: some View {
+        configSection(
+            "Roles",
+            footer: "Define custom roles (e.g. \"59IC\", \"L5\") and map each to a grade level for ranking. Engineers can then be assigned a custom role instead of a standard grade."
+        ) {
+            if draft.customRoles.isEmpty {
+                Text("No custom roles defined. Engineers use standard grade levels by default.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(draft.customRoles.indices, id: \.self) { i in
+                    roleRow(i)
+                    if i < draft.customRoles.count - 1 { Divider() }
+                }
+            }
+
+            Button {
+                draft.customRoles.append(CalibrationRole(name: "New Role", gradeLevel: .engineer))
+            } label: {
+                Label("Add Role", systemImage: "plus").font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .padding(.top, draft.customRoles.isEmpty ? 0 : 4)
+        }
+    }
+
+    private func roleRow(_ i: Int) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(draft.customRoles[i].gradeLevel.neonColor.opacity(0.2))
+                .frame(width: 10, height: 10)
+
+            TextField("Role name", text: $draft.customRoles[i].name)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 140)
+
+            Text("→")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 12))
+
+            Picker("", selection: $draft.customRoles[i].gradeLevel) {
+                ForEach(GradeLevel.allCases, id: \.self) { g in
+                    Text(g.rawValue).tag(g)
+                }
+            }
+            .frame(width: 180)
+
+            Spacer()
+
+            Button {
+                let removedId = draft.customRoles[i].id
+                draft.customRoles.remove(at: i)
+                // Clear roleId on any engineer that was using this role
+                for j in draft.engineers.indices where draft.engineers[j].roleId == removedId {
+                    draft.engineers[j].roleId = ""
+                }
+            } label: {
+                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 2)
+    }
+
+    // MARK: - Engineers
+
     private var engineersSection: some View {
         configSection(
             "Engineers",
-            footer: "Discover automatically finds all Jira assignees from recent sprint data. Assign grade levels to enable cross-team normalization."
+            footer: "Discover finds Jira assignees from recent sprint data. GitLab usernames are auto-populated from Jira email when available."
         ) {
             if draft.engineers.isEmpty {
                 Text("No engineers configured yet. Use \"Discover\" to find assignees from recent sprint data.")
@@ -195,14 +271,16 @@ struct CalibrationConfigView: View {
     // MARK: - Engineer row
 
     private func engineerRow(_ eng: EngineerAssignment) -> some View {
-        HStack(spacing: 10) {
+        let resolvedGrade = resolveGrade(for: eng)
+
+        return HStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(eng.gradeLevel.neonColor.opacity(0.15))
+                    .fill(resolvedGrade.neonColor.opacity(0.15))
                     .frame(width: 32, height: 32)
                 Text(String(eng.displayName.prefix(2)))
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(eng.gradeLevel.neonColor)
+                    .foregroundStyle(resolvedGrade.neonColor)
             }
 
             VStack(alignment: .leading, spacing: 1) {
@@ -230,29 +308,50 @@ struct CalibrationConfigView: View {
 
             Spacer()
 
+            // Role picker: custom roles first, then standard grade levels
             Picker("", selection: Binding(
-                get: { eng.gradeLevel },
-                set: { grade in
-                    if let idx = draft.engineers.firstIndex(where: { $0.id == eng.id }) {
-                        draft.engineers[idx].gradeLevel = grade
+                get: { RolePick.from(eng) },
+                set: { pick in
+                    guard let idx = draft.engineers.firstIndex(where: { $0.id == eng.id }) else { return }
+                    switch pick {
+                    case .custom(let rid):
+                        draft.engineers[idx].roleId = rid
+                        if let role = draft.customRoles.first(where: { $0.id == rid }) {
+                            draft.engineers[idx].gradeLevel = role.gradeLevel
+                        }
+                    case .grade(let g):
+                        draft.engineers[idx].roleId = ""
+                        draft.engineers[idx].gradeLevel = g
                     }
                 }
             )) {
-                ForEach(GradeLevel.allCases, id: \.self) { grade in
-                    Text(grade.rawValue).tag(grade)
+                if !draft.customRoles.isEmpty {
+                    ForEach(draft.customRoles) { role in
+                        Text(role.name).tag(RolePick.custom(role.id))
+                    }
+                    Divider()
+                }
+                ForEach(GradeLevel.allCases, id: \.self) { g in
+                    Text(g.rawValue).tag(RolePick.grade(g))
                 }
             }
-            .frame(width: 180)
+            .frame(width: 190)
 
             Button {
                 draft.engineers.removeAll { $0.id == eng.id }
             } label: {
-                Image(systemName: "minus.circle.fill")
-                    .foregroundStyle(.secondary)
+                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
         }
         .padding(.vertical, 2)
+    }
+
+    private func resolveGrade(for eng: EngineerAssignment) -> GradeLevel {
+        if let role = draft.customRoles.first(where: { $0.id == eng.roleId }) {
+            return role.gradeLevel
+        }
+        return eng.gradeLevel
     }
 
     // MARK: - Discover
@@ -265,16 +364,16 @@ struct CalibrationConfigView: View {
 
         var found: [EngineerAssignment] = []
         let existingIds = Set(draft.engineers.map(\.jiraAccountId))
+        let jiraSvc = JiraService(config: cfg)
 
         do {
             for boardRef in draft.boards {
-                let svc = JiraService(config: cfg)
-                let fields = (try? await svc.fetchFields()) ?? []
+                let fields = (try? await jiraSvc.fetchFields()) ?? []
                 let pf = boardRef.pointsField.isEmpty
                     ? (fields.first(where: { $0.name.localizedCaseInsensitiveContains("story point") })?.id ?? "story_points")
                     : boardRef.pointsField
 
-                let sprints = try await svc.fetchCalibrationSprints(
+                let sprints = try await jiraSvc.fetchCalibrationSprints(
                     boardId: boardRef.boardId,
                     sprintCount: draft.sprintCount,
                     pointsField: pf
@@ -285,10 +384,19 @@ struct CalibrationConfigView: View {
                               let name = issue.displayName,
                               !existingIds.contains(aid),
                               !found.contains(where: { $0.jiraAccountId == aid }) else { continue }
+
+                        // Derive GitLab username from Jira email (local part before @)
+                        let email = try? await jiraSvc.fetchUserEmail(accountId: aid)
+                        let glUsername = email.flatMap { e in
+                            let local = e.components(separatedBy: "@").first ?? ""
+                            return local.isEmpty ? nil : local
+                        } ?? ""
+
                         found.append(EngineerAssignment(
                             jiraAccountId: aid,
                             displayName: name,
-                            gradeLevel: .engineer
+                            gradeLevel: .engineer,
+                            gitlabUsername: glUsername
                         ))
                     }
                 }
@@ -361,8 +469,7 @@ private struct CalibrationAddBoardSheet: View {
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Text("Add Board")
-                    .font(.headline)
+                Text("Add Board").font(.headline)
                 Spacer()
                 Button("Add") {
                     guard let board = selectedBoard else { return }
